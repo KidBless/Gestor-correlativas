@@ -311,6 +311,43 @@ button.success:hover {
     background: #059669;
 }
 
+/* --- Edit mode prereq tags --- */
+
+.edit-prereq-regular-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 6px 0;
+}
+
+.prereq-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.prereq-tag:hover {
+    border-color: var(--primary);
+}
+
+.prereq-tag input[type="checkbox"] {
+    margin: 0;
+    accent-color: var(--primary);
+}
+
+.prereq-tag-hint {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
 /* --- Spinner --- */
 .spinner {
     display: inline-block;

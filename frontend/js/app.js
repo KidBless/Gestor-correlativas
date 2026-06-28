@@ -534,13 +534,20 @@ function renderPdfPreview(subjects) {
             <th style="width:60px">Año</th>
             <th style="width:70px">Sem.</th>
             <th>Correlativas</th>
+            <th style="width:80px">Solo regular</th>
         </tr></thead><tbody>`;
     subjects.forEach((s, i) => {
+        const regSet = new Set(s.prerequisites_regular_only || []);
+        const prereqDisplay = (s.prerequisites || []).map((p) => {
+            return regSet.has(p) ? `${p} (R)` : p;
+        }).join(", ");
+        const regularStr = (s.prerequisites_regular_only || []).join(", ");
         html += `<tr>
             <td><input type="text" class="name-input" data-idx="${i}" value="${escapeHtml(s.name)}"></td>
             <td><input type="number" class="year-input" data-idx="${i}" value="${s.year}" min="1"></td>
             <td><input type="number" class="sem-input" data-idx="${i}" value="${s.semester}" min="1" max="2"></td>
-            <td><input type="text" class="prereq-input" data-idx="${i}" value="${escapeHtml((s.prerequisites || []).join(", "))}"></td>
+            <td><input type="text" class="prereq-input" data-idx="${i}" value="${escapeHtml(prereqDisplay)}"></td>
+            <td><input type="text" class="regular-input" data-idx="${i}" placeholder="Nombres separados por coma" value="${escapeHtml(regularStr)}"></td>
         </tr>`;
     });
     html += "</tbody></table>";
@@ -559,13 +566,21 @@ function getEditedParsedSubjects() {
         const yearInput = document.querySelector(`.year-input[data-idx="${i}"]`);
         const semInput = document.querySelector(`.sem-input[data-idx="${i}"]`);
         const prereqInput = document.querySelector(`.prereq-input[data-idx="${i}"]`);
+        const regularInput = document.querySelector(`.regular-input[data-idx="${i}"]`);
+        // Parse prereqs, strip (R) markers
+        const rawPrereqs = prereqInput
+            ? prereqInput.value.split(",").map((p) => p.trim().replace(/\s*\(R\)\s*$/i, "").trim()).filter(Boolean)
+            : s.prerequisites;
+        // Parse regular-only names
+        const regularOnly = regularInput
+            ? regularInput.value.split(",").map((p) => p.trim()).filter(Boolean)
+            : (s.prerequisites_regular_only || []);
         return {
             name: nameInput ? nameInput.value.trim() : s.name,
             year: yearInput ? parseInt(yearInput.value) || s.year : s.year,
             semester: semInput ? parseInt(semInput.value) || s.semester : s.semester,
-            prerequisites: prereqInput
-                ? prereqInput.value.split(",").map((p) => p.trim()).filter(Boolean)
-                : s.prerequisites,
+            prerequisites: rawPrereqs,
+            prerequisites_regular_only: regularOnly,
         };
     });
 }
@@ -690,12 +705,19 @@ btnAddSubject.addEventListener("click", async () => {
 function computeAvailability(subjects) {
     const statusMap = {};
     subjects.forEach((s) => { statusMap[s.name] = s.status; });
+    const regularSet = new Set();
+    subjects.forEach((s) => {
+        (s.prerequisites_regular_only || []).forEach((name) => regularSet.add(name));
+    });
 
     const result = [];
     for (const s of subjects) {
-        const blockedBy = s.prerequisites.filter(
-            (pr) => statusMap[pr] !== "aprobado" && statusMap[pr] !== "promocionado"
-        );
+        const blockedBy = s.prerequisites.filter((pr) => {
+            if (regularSet.has(pr)) {
+                return statusMap[pr] !== "regular" && statusMap[pr] !== "aprobado" && statusMap[pr] !== "promocionado";
+            }
+            return statusMap[pr] !== "aprobado" && statusMap[pr] !== "promocionado";
+        });
         result.push({ ...s, available: blockedBy.length === 0, blockedBy });
     }
     return result;
@@ -708,6 +730,16 @@ function startEditSubject(card, subject) {
     card.dataset.origHTML = origHTML;
 
     const prereqStr = (subject.prerequisites || []).join(", ");
+    const regularSet = new Set(subject.prerequisites_regular_only || []);
+    const prereqTags = (subject.prerequisites || []).map((p) => {
+        const isRegular = regularSet.has(p);
+        return `<label class="prereq-tag">
+            <input type="checkbox" class="prereq-regular-cb" data-name="${escapeHtml(p)}" ${isRegular ? "checked" : ""}>
+            <span>${escapeHtml(p)}</span>
+            <span class="prereq-tag-hint">${isRegular ? "solo regular" : "aprobado"}</span>
+        </label>`;
+    }).join("");
+
     card.innerHTML = `
         <div class="edit-mode">
             <input type="text" class="edit-name" value="${escapeHtml(subject.name)}" placeholder="Nombre">
@@ -716,6 +748,7 @@ function startEditSubject(card, subject) {
                 <input type="number" class="edit-sem" value="${subject.semester}" min="1" max="2" placeholder="Sem.">
             </div>
             <input type="text" class="edit-prereqs" value="${escapeHtml(prereqStr)}" placeholder="Correlativas">
+            <div class="edit-prereq-regular-list">${prereqTags}</div>
             <div class="edit-actions">
                 <button class="btn-edit-save btn-small success">Guardar</button>
                 <button class="btn-edit-cancel btn-small secondary">Cancelar</button>
@@ -723,12 +756,26 @@ function startEditSubject(card, subject) {
         </div>
     `;
 
+    // Toggle hint on checkbox change
+    card.querySelectorAll(".prereq-regular-cb").forEach((cb) => {
+        cb.addEventListener("change", () => {
+            const hint = cb.parentElement.querySelector(".prereq-tag-hint");
+            hint.textContent = cb.checked ? "solo regular" : "aprobado";
+        });
+    });
+
     card.querySelector(".btn-edit-save").addEventListener("click", async () => {
         const newName = card.querySelector(".edit-name").value.trim();
         const newYear = parseInt(card.querySelector(".edit-year").value);
         const newSem = parseInt(card.querySelector(".edit-sem").value);
         const newPrereqs = card.querySelector(".edit-prereqs").value
             .split(",").map((s) => s.trim()).filter(Boolean);
+
+        // Collect regular-only prerequisites
+        const regularOnly = [];
+        card.querySelectorAll(".prereq-regular-cb").forEach((cb) => {
+            if (cb.checked) regularOnly.push(cb.dataset.name);
+        });
 
         if (!newName || !newYear || !newSem) {
             toast("Completá nombre, año y semestre", "warning");
@@ -743,6 +790,7 @@ function startEditSubject(card, subject) {
                     year: newYear,
                     semester: newSem,
                     prerequisites: newPrereqs,
+                    prerequisites_regular_only: regularOnly,
                 }),
             });
             const career = await apiFetch(`/careers/${currentCareerId}`);
@@ -795,9 +843,13 @@ function renderSubjects(subjects) {
     for (const [year, subs] of Object.entries(byYear)) {
         html += `<div class="year-section"><h3>${year}</h3><div class="subjects-grid">`;
         subs.forEach((s) => {
+            const regSet = new Set(s.prerequisites_regular_only || []);
+            const prereqDisplay = s.prerequisites.map((p) =>
+                regSet.has(p) ? `${p} (solo regular)` : p
+            ).join(", ");
             const prereqText =
                 s.prerequisites.length > 0
-                    ? `📎 ${s.prerequisites.join(", ")}`
+                    ? `📎 ${prereqDisplay}`
                     : "Sin correlativas";
             const locked = !s.available && s.status === "no_cursada";
             const lockIcon = locked ? '<span class="lock-icon" title="Correlativas pendientes">🔒</span>' : "";

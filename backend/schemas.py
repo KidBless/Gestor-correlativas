@@ -37,6 +37,7 @@ class SubjectBase(BaseModel):
     year: int
     semester: int
     prerequisites: List[str] = []
+    prerequisites_regular_only: List[str] = []
 
 
 class SubjectCreate(SubjectBase):
@@ -52,6 +53,7 @@ class SubjectEdit(BaseModel):
     year: int
     semester: int
     prerequisites: List[str] = []
+    prerequisites_regular_only: List[str] = []
 
 
 class SubjectOut(BaseModel):
@@ -61,6 +63,7 @@ class SubjectOut(BaseModel):
     semester: int
     status: str
     prerequisites: List[str] = []
+    prerequisites_regular_only: List[str] = []
 
     class Config:
         from_attributes = True
@@ -99,6 +102,7 @@ class ParsedSubjectOut(BaseModel):
     year: int
     semester: int
     prerequisites: List[str] = []
+    prerequisites_regular_only: List[str] = []
 
 
 class PdfParseOut(BaseModel):

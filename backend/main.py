@@ -291,6 +291,8 @@ def edit_subject(
             if prereq and prereq.id != subject.id:
                 subject.prerequisites.append(prereq)
 
+    subject.prerequisites_regular_only = list(payload.prerequisites_regular_only or [])
+
     db.commit()
     db.refresh(subject)
 
@@ -474,6 +476,7 @@ def _add_subjects_to_career(db: Session, career: Career, subjects_data: list):
             year=s.year,
             semester=s.semester,
             career_id=career.id,
+            prerequisites_regular_only=list(getattr(s, 'prerequisites_regular_only', [])),
         )
         db.add(subj)
         db.flush()
@@ -494,6 +497,7 @@ def _add_subjects_to_career(db: Session, career: Career, subjects_data: list):
 
 def _subject_to_user_out(subject: Subject, status: str, db: Session) -> SubjectOut:
     prereq_names = [p.name for p in subject.prerequisites]
+    regular_only = list(subject.prerequisites_regular_only or [])
     return SubjectOut(
         id=subject.id,
         name=subject.name,
@@ -501,6 +505,7 @@ def _subject_to_user_out(subject: Subject, status: str, db: Session) -> SubjectO
         semester=subject.semester,
         status=status,
         prerequisites=prereq_names,
+        prerequisites_regular_only=regular_only,
     )
 
 
@@ -509,6 +514,7 @@ def _career_to_user_out(career: Career, user_id: int, db: Session) -> CareerOut:
     for s in career.subjects:
         status = _get_user_status(s.id, user_id, db)
         prereq_names = [p.name for p in s.prerequisites]
+        regular_only = list(s.prerequisites_regular_only or [])
         subjects.append(
             SubjectOut(
                 id=s.id,
@@ -517,6 +523,7 @@ def _career_to_user_out(career: Career, user_id: int, db: Session) -> CareerOut:
                 semester=s.semester,
                 status=status,
                 prerequisites=prereq_names,
+                prerequisites_regular_only=regular_only,
             )
         )
     return CareerOut(

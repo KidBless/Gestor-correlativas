@@ -1,7 +1,16 @@
+import json
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, ForeignKey, Table, DateTime
+from sqlalchemy import Column, Integer, String, ForeignKey, Table, DateTime, TypeDecorator
 from sqlalchemy.orm import relationship
 from database import Base
+
+
+class JSONList(TypeDecorator):
+    impl = String
+    def process_bind_param(self, value, dialect):
+        return json.dumps(value or [])
+    def process_result_value(self, value, dialect):
+        return json.loads(value) if value else []
 
 
 prerequisite_association = Table(
@@ -43,6 +52,7 @@ class Subject(Base):
     year = Column(Integer, nullable=False)
     semester = Column(Integer, nullable=False)
     career_id = Column(Integer, ForeignKey("careers.id"), nullable=False)
+    prerequisites_regular_only = Column(JSONList, default=[])
 
     career = relationship("Career", back_populates="subjects")
     user_statuses = relationship("UserSubject", back_populates="subject", cascade="all, delete-orphan")

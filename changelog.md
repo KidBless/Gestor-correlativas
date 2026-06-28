@@ -1,5 +1,16 @@
 # Changelog
 
+## [2026-06-28] Soporte para correlativas solo con regularidad
+
+### Realizado
+- **Backend**: nuevo campo `prerequisites_regular_only` (JSON) en el modelo Subject — lista de nombres de correlativas que solo requieren estado "regular" (no necesitan "aprobado"/"promocionado")
+- **Backend**: type decorator `JSONList` para almacenar listas como JSON en SQLite
+- **Backend**: schemas actualizados (`SubjectCreate`, `SubjectEdit`, `SubjectOut`, `ParsedSubjectOut`) con campo `prerequisites_regular_only`
+- **Backend**: endpoints `PUT /subjects/{id}/edit` y carga de materias ahora persisten y devuelven `prerequisites_regular_only`
+- **Frontend**: `computeAvailability` revisado — si la correlativa está en `prerequisites_regular_only`, alcanza con estado "regular"; caso contrario necesita "aprobado" o "promocionado"
+- **Frontend**: edición inline de materia — cada correlativa muestra un checkbox para marcarla como "solo regular", con indicador visual
+- **Frontend**: preview de carga — nueva columna "Solo regular" para marcar correlativas que solo requieren regularidad
+
 ## [2026-06-28] Admin dashboard
 
 ### Realizado
