@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestor de Correlativas</title>
     <link rel="stylesheet" href="css/style.css">
+    <script>window.__API_URL = window.__API_URL || "http://localhost:8000/api";</script>
 </head>
 <body>
     <div id="app">
@@ -23,15 +24,16 @@
                 </div>
                 <div id="auth-login" class="auth-panel">
                     <div class="form-row">
-                        <input type="text" id="login-username" placeholder="Usuario">
-                        <input type="password" id="login-password" placeholder="Contraseña">
+                        <input type="text" id="login-username" placeholder="Usuario" autocomplete="username">
+                        <input type="password" id="login-password" placeholder="Contraseña" autocomplete="current-password">
                         <button id="btn-login">Ingresar</button>
                     </div>
                 </div>
                 <div id="auth-register" class="auth-panel hidden">
                     <div class="form-row">
-                        <input type="text" id="register-username" placeholder="Usuario">
-                        <input type="password" id="register-password" placeholder="Contraseña">
+                        <input type="text" id="register-username" placeholder="Usuario" autocomplete="username">
+                        <input type="password" id="register-password" placeholder="Contraseña" autocomplete="new-password">
+                        <input type="password" id="register-confirm" placeholder="Repetir contraseña" autocomplete="new-password">
                         <button id="btn-register">Crear cuenta</button>
                     </div>
                 </div>
@@ -76,6 +78,7 @@
                     <div class="form-row">
                         <input type="text" id="career-name" placeholder="Nombre de la nueva carrera (ej: Analista en Sistemas)">
                         <button id="btn-create-career">Crear carrera</button>
+                        <button id="btn-delete-career" class="danger btn-small hidden">Eliminar</button>
                     </div>
                 </section>
 
@@ -161,7 +164,19 @@ Física I (correlativas: Análisis Matemático I, Álgebra)'></textarea>
 
                 <!-- Step 3: Subjects -->
                 <section id="step-manage" class="hidden">
-                    <h2><span class="step-num">3</span> Mis materias</h2>
+                    <h2>
+                        <span class="step-num">3</span> Mis materias
+                        <span class="filter-group">
+                            <select id="status-filter">
+                                <option value="">Todos los estados</option>
+                                <option value="no_cursada">No cursada</option>
+                                <option value="cursando">Cursando</option>
+                                <option value="regular">Regular</option>
+                                <option value="aprobado">Aprobado</option>
+                                <option value="promocionado">Promocionado</option>
+                            </select>
+                        </span>
+                    </h2>
                     <div id="subjects-container">
                         <p class="help">No hay materias cargadas aún.</p>
                     </div>
@@ -171,6 +186,26 @@ Física I (correlativas: Análisis Matemático I, Álgebra)'></textarea>
                 <section id="step-progress" class="hidden">
                     <h2><span class="step-num">4</span> Avance</h2>
                     <div id="progress-container"></div>
+                </section>
+
+                <!-- Step 5: Admin Dashboard -->
+                <section id="step-admin" class="hidden">
+                    <h2><span class="step-num">5</span> Administración</h2>
+                    <div class="admin-tabs">
+                        <button class="admin-tab active" data-admin="users">Usuarios</button>
+                        <button class="admin-tab" data-admin="careers">Carreras</button>
+                        <button class="admin-tab" data-admin="server">Servidor</button>
+                    </div>
+                    <div id="admin-users" class="admin-panel">
+                        <div id="admin-users-content"><p class="help">Cargando usuarios...</p></div>
+                    </div>
+                    <div id="admin-careers" class="admin-panel hidden">
+                        <div id="admin-careers-content"><p class="help">Cargando carreras...</p></div>
+                    </div>
+                    <div id="admin-server" class="admin-panel hidden">
+                        <div id="admin-server-content"><p class="help">Cargando estadísticas del servidor...</p></div>
+                        <button id="btn-refresh-server" class="secondary btn-small">Actualizar</button>
+                    </div>
                 </section>
             </main>
         </div>

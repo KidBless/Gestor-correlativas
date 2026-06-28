@@ -1,7 +1,8 @@
-fastapi
-uvicorn
-sqlalchemy
-pydantic
-pdfminer.six
-python-multipart
-pyjwt
+fastapi>=0.115.0
+uvicorn>=0.32.0
+sqlalchemy>=2.0.0
+pydantic>=2.0.0
+pdfminer.six>=20240706
+python-multipart>=0.0.12
+pyjwt>=2.9.0
+psutil>=6.0.0

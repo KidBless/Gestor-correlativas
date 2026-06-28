@@ -1,5 +1,18 @@
 # Changelog
 
+## [2026-06-28] Admin dashboard
+
+### Realizado
+- **Backend**: nuevos endpoints protegidos para admin — `GET /api/admin/users` (lista todos los usuarios con rol y fecha), `GET /api/admin/careers` (lista carreras con cantidad de materias), `GET /api/admin/server-stats` (CPU, RAM, disco, uptime, versión Python y plataforma)
+- **Backend**: agregado `psutil` a dependencias para recolectar estadísticas del servidor
+- **Backend**: `DATABASE_URL` configurable por variable de entorno (con fallback a SQLite)
+- **Backend**: nuevos schemas `AdminUserOut`, `AdminCareerOut`, `ServerStatsOut`
+- **Frontend**: sección "Administración" (paso 5) visible solo para usuarios admin con tres pestañas:
+  - Usuarios: tabla con ID, username, badge de rol, fecha de registro
+  - Carreras: tabla con ID, nombre, facultad, cantidad de materias
+  - Servidor: cards con CPU/RAM/Disco/Uptime + barras de uso + botón Actualizar
+- **Frontend**: la sección admin aparece al iniciar sesión y al cargar una carrera; se oculta al cerrar sesión
+
 ## [2026-06-28] Correcciones en parser, buscador y UX
 
 ### Realizado

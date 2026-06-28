@@ -47,6 +47,13 @@ class SubjectUpdate(BaseModel):
     status: str
 
 
+class SubjectEdit(BaseModel):
+    name: str
+    year: int
+    semester: int
+    prerequisites: List[str] = []
+
+
 class SubjectOut(BaseModel):
     id: int
     name: str
@@ -80,6 +87,13 @@ class CareerOut(BaseModel):
         from_attributes = True
 
 
+class CareerListItem(BaseModel):
+    id: int
+    name: str
+    faculty_name: str = ""
+    subject_count: int = 0
+
+
 class ParsedSubjectOut(BaseModel):
     name: str
     year: int
@@ -103,3 +117,36 @@ class ProgressOut(BaseModel):
     no_cursada: int
     progress_percentage: float
     subjects_by_year: dict
+
+
+# --- Admin ---
+
+class AdminUserOut(BaseModel):
+    id: int
+    username: str
+    role: str
+    created_at: str
+
+    class Config:
+        from_attributes = True
+
+
+class AdminCareerOut(BaseModel):
+    id: int
+    name: str
+    faculty_name: str = ""
+    subject_count: int
+    created_at: str = ""
+
+
+class ServerStatsOut(BaseModel):
+    cpu_percent: float
+    memory_percent: float
+    memory_used_mb: float
+    memory_total_mb: float
+    disk_percent: float
+    disk_used_gb: float
+    disk_total_gb: float
+    uptime_seconds: float
+    python_version: str
+    platform: str

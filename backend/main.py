@@ -12,8 +12,10 @@ from schemas import (
     CareerCreate,
     CareerUpload,
     CareerOut,
+    CareerListItem,
     SubjectOut,
     SubjectUpdate,
+    SubjectEdit,
     ProgressOut,
     PdfParseOut,
     ParsedSubjectOut,
@@ -21,17 +23,22 @@ from schemas import (
     AuthLogin,
     AuthOut,
     UserOut,
+    AdminUserOut,
+    AdminCareerOut,
+    ServerStatsOut,
 )
 from parser import parse_pdf
 from auth import hash_password, verify_password, create_token, get_current_user, require_admin
 
 Base.metadata.create_all(bind=engine)
 
+origins_str = os.environ.get("CORS_ORIGINS", "*")
+
 app = FastAPI(title="Gestor de Correlativas")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins_str.split(",") if origins_str != "*" else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -50,7 +57,7 @@ def register(payload: AuthRegister, db: Session = Depends(get_db)):
 
     existing = db.query(User).filter(User.username == payload.username).first()
     if existing:
-        raise HTTPException(status_code=400, detail="El usuario ya existe")
+        raise HTTPException(status_code=400, detail="Ese nombre de usuario ya está registrado")
 
     # First user becomes admin
     is_first = db.query(User).count() == 0
@@ -91,7 +98,7 @@ def me(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
 @app.post("/api/parse-pdf", response_model=PdfParseOut)
 async def parse_pdf_endpoint(file: UploadFile = File(...)):
     if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="El archivo debe ser un PDF")
+        raise HTTPException(status_code=400, detail="El archivo debe tener extensión .pdf")
 
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     try:
@@ -141,10 +148,18 @@ def parse_text_endpoint(payload: TextParsePayload):
 # --- Career endpoints ---
 
 
-@app.get("/api/careers", response_model=List[CareerOut])
+@app.get("/api/careers", response_model=List[CareerListItem])
 def list_careers(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     careers = db.query(Career).all()
-    return [_career_to_user_out(c, user["user_id"], db) for c in careers]
+    return [
+        CareerListItem(
+            id=c.id,
+            name=c.name,
+            faculty_name=c.faculty_name or "",
+            subject_count=len(c.subjects),
+        )
+        for c in careers
+    ]
 
 
 @app.post("/api/careers", response_model=CareerOut)
@@ -182,6 +197,9 @@ def add_subjects(
     if not career:
         raise HTTPException(status_code=404, detail="Carrera no encontrada")
     _add_subjects_to_career(db, career, payload.subjects)
+    # If faculty_name provided, update it
+    if payload.faculty_name and not career.faculty_name:
+        career.faculty_name = payload.faculty_name
     db.commit()
     db.refresh(career)
     return _career_to_user_out(career, user["user_id"], db)
@@ -204,9 +222,10 @@ def delete_career(career_id: int, admin: dict = Depends(require_admin), db: Sess
     career = db.query(Career).filter(Career.id == career_id).first()
     if not career:
         raise HTTPException(status_code=404, detail="Carrera no encontrada")
+    name = career.name
     db.delete(career)
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "detail": f'Carrera "{name}" eliminada'}
 
 
 # --- Subject endpoints ---
@@ -242,6 +261,61 @@ def update_subject_status(
     db.commit()
     db.refresh(us)
     return _subject_to_user_out(subject, us.status, db)
+
+
+@app.put("/api/subjects/{subject_id}/edit", response_model=SubjectOut)
+def edit_subject(
+    subject_id: int,
+    payload: SubjectEdit,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    subject = db.query(Subject).filter(Subject.id == subject_id).first()
+    if not subject:
+        raise HTTPException(status_code=404, detail="Materia no encontrada")
+
+    old_name = subject.name
+    subject.name = payload.name
+    subject.year = payload.year
+    subject.semester = payload.semester
+
+    # Update prerequisites
+    subject.prerequisites = []
+    if payload.prerequisites:
+        all_map = {
+            s.name: s
+            for s in db.query(Subject).filter(Subject.career_id == subject.career_id).all()
+        }
+        for prereq_name in payload.prerequisites:
+            prereq = all_map.get(prereq_name)
+            if prereq and prereq.id != subject.id:
+                subject.prerequisites.append(prereq)
+
+    db.commit()
+    db.refresh(subject)
+
+    us = (
+        db.query(UserSubject)
+        .filter(UserSubject.user_id == user["user_id"], UserSubject.subject_id == subject_id)
+        .first()
+    )
+    status = us.status if us else "no_cursada"
+    return _subject_to_user_out(subject, status, db)
+
+
+@app.delete("/api/subjects/{subject_id}")
+def delete_subject(
+    subject_id: int,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    subject = db.query(Subject).filter(Subject.id == subject_id).first()
+    if not subject:
+        raise HTTPException(status_code=404, detail="Materia no encontrada")
+    name = subject.name
+    db.delete(subject)
+    db.commit()
+    return {"ok": True, "detail": f'"{name}" eliminada'}
 
 
 # --- Progress endpoint ---
@@ -309,6 +383,66 @@ def get_progress(
     )
 
 
+# --- Admin endpoints ---
+
+
+@app.get("/api/admin/users", response_model=List[AdminUserOut])
+def admin_list_users(admin: dict = Depends(require_admin), db: Session = Depends(get_db)):
+    users = db.query(User).all()
+    return [
+        AdminUserOut(
+            id=u.id,
+            username=u.username,
+            role=u.role,
+            created_at=u.created_at.isoformat() if u.created_at else "",
+        )
+        for u in users
+    ]
+
+
+@app.get("/api/admin/careers", response_model=List[AdminCareerOut])
+def admin_list_careers(admin: dict = Depends(require_admin), db: Session = Depends(get_db)):
+    careers = db.query(Career).all()
+    return [
+        AdminCareerOut(
+            id=c.id,
+            name=c.name,
+            faculty_name=c.faculty_name or "",
+            subject_count=len(c.subjects),
+            created_at="",
+        )
+        for c in careers
+    ]
+
+
+@app.get("/api/admin/server-stats", response_model=ServerStatsOut)
+def admin_server_stats(admin: dict = Depends(require_admin)):
+    import psutil
+    import os
+    import platform
+
+    cpu = psutil.cpu_percent(interval=0.3)
+    mem = psutil.virtual_memory()
+    disk = psutil.disk_usage(os.path.abspath(os.sep))
+    boot_time = psutil.boot_time()
+
+    import time
+    uptime = time.time() - boot_time
+
+    return ServerStatsOut(
+        cpu_percent=cpu,
+        memory_percent=mem.percent,
+        memory_used_mb=round(mem.used / 1024 / 1024, 1),
+        memory_total_mb=round(mem.total / 1024 / 1024, 1),
+        disk_percent=disk.percent,
+        disk_used_gb=round(disk.used / 1024 / 1024 / 1024, 1),
+        disk_total_gb=round(disk.total / 1024 / 1024 / 1024, 1),
+        uptime_seconds=round(uptime, 0),
+        python_version=platform.python_version(),
+        platform=platform.system() + " " + platform.release(),
+    )
+
+
 # --- Helpers ---
 
 
@@ -320,7 +454,6 @@ def _get_user_status(subject_id: int, user_id: int, db: Session) -> str:
     )
     if us:
         return us.status
-    # Auto-create on first access
     us = UserSubject(user_id=user_id, subject_id=subject_id, status="no_cursada")
     db.add(us)
     db.flush()

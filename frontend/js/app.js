@@ -1,11 +1,13 @@
-const API = "http://localhost:8000/api";
+const API = window.__API_URL || "http://localhost:8000/api";
 
 // --- Auth state ---
 let token = sessionStorage.getItem("token") || null;
 let currentUser = null;
 let currentCareerId = null;
+let currentCareerData = null;
 let parsedSubjects = null;
 let parsedFacultyName = "";
+let statusFilter = "";
 
 // --- Toast system ---
 function toast(message, type = "info") {
@@ -30,6 +32,10 @@ async function apiFetch(url, options = {}) {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(options.headers || {}),
     };
+    // Don't set Content-Type for FormData (PDF upload)
+    if (options.body instanceof FormData) {
+        delete headers["Content-Type"];
+    }
     const res = await fetch(`${API}${url}`, {
         ...options,
         headers,
@@ -78,6 +84,7 @@ function showApp() {
         badge.innerHTML = `${currentUser.username} <span class="role-badge role-${currentUser.role}">${roleText}</span>`;
         badge.classList.remove("hidden");
         document.getElementById("btn-logout").classList.remove("hidden");
+        showAdminDashboard();
     }
 }
 
@@ -129,6 +136,12 @@ document.getElementById("register-username").addEventListener("keydown", (e) => 
 document.getElementById("register-password").addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
         e.preventDefault();
+        document.getElementById("register-confirm").focus();
+    }
+});
+document.getElementById("register-confirm").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+        e.preventDefault();
         document.getElementById("btn-register").click();
     }
 });
@@ -172,12 +185,17 @@ document.getElementById("btn-login").addEventListener("click", async () => {
 document.getElementById("btn-register").addEventListener("click", async () => {
     const username = document.getElementById("register-username").value.trim();
     const password = document.getElementById("register-password").value;
-    if (!username || !password) {
-        toast("Completá usuario y contraseña", "warning");
+    const confirm = document.getElementById("register-confirm").value;
+    if (!username || !password || !confirm) {
+        toast("Completá todos los campos", "warning");
         return;
     }
     if (password.length < 4) {
         toast("La contraseña debe tener al menos 4 caracteres", "warning");
+        return;
+    }
+    if (password !== confirm) {
+        toast("Las contraseñas no coinciden", "error");
         return;
     }
     setLoading(document.getElementById("btn-register"), true);
@@ -197,6 +215,7 @@ document.getElementById("btn-register").addEventListener("click", async () => {
         sessionStorage.setItem("token", token);
         document.getElementById("register-username").value = "";
         document.getElementById("register-password").value = "";
+        document.getElementById("register-confirm").value = "";
         showApp();
         loadCareerList();
         const msg = data.role === "admin" ? "Cuenta admin creada (primer usuario)" : "Cuenta creada correctamente";
@@ -214,10 +233,12 @@ document.getElementById("btn-logout").addEventListener("click", () => {
     token = null;
     currentUser = null;
     currentCareerId = null;
+    currentCareerData = null;
     parsedSubjects = null;
     document.getElementById("step-upload").classList.add("hidden");
     document.getElementById("step-manage").classList.add("hidden");
     document.getElementById("step-progress").classList.add("hidden");
+    document.getElementById("step-admin").classList.add("hidden");
     showAuth();
     toast("Sesión cerrada", "info");
 });
@@ -226,6 +247,7 @@ document.getElementById("btn-logout").addEventListener("click", () => {
 const careerSelect = document.getElementById("career-select");
 const btnLoadCareer = document.getElementById("btn-load-career");
 const btnCreateCareer = document.getElementById("btn-create-career");
+const btnDeleteCareer = document.getElementById("btn-delete-career");
 const careerNameInput = document.getElementById("career-name");
 const careerSearch = document.getElementById("career-search");
 const careerSearchEmpty = document.getElementById("career-search-empty");
@@ -267,6 +289,7 @@ const btnCancelPdf = document.getElementById("btn-cancel-pdf");
 
 const subjectsContainer = document.getElementById("subjects-container");
 const progressContainer = document.getElementById("progress-container");
+const statusFilterEl = document.getElementById("status-filter");
 
 // --- Method tabs ---
 methodTabs.forEach((tab) => {
@@ -296,7 +319,7 @@ function filterCareerList(query) {
         const opt = document.createElement("option");
         opt.value = c.id;
         const faculty = c.faculty_name ? ` [${c.faculty_name}]` : "";
-        opt.textContent = c.name + faculty;
+        opt.textContent = `${c.name}${faculty} (${c.subject_count} materias)`;
         careerSelect.appendChild(opt);
     });
     careerSearchEmpty.classList.toggle("hidden", filtered.length > 0 || !query);
@@ -306,6 +329,9 @@ async function loadCareerList() {
     try {
         allCareers = await apiFetch("/careers");
         filterCareerList(careerSearch.value);
+        if (currentUser) {
+            btnDeleteCareer.classList.toggle("hidden", currentUser.role !== "admin");
+        }
     } catch (e) {
         toast("Error al cargar carreras: " + e.message, "error");
     }
@@ -313,6 +339,14 @@ async function loadCareerList() {
 
 careerSearch.addEventListener("input", () => {
     filterCareerList(careerSearch.value);
+});
+
+// Status filter
+statusFilterEl.addEventListener("change", () => {
+    statusFilter = statusFilterEl.value;
+    if (currentCareerData) {
+        renderSubjects(currentCareerData.subjects);
+    }
 });
 
 btnCreateCareer.addEventListener("click", async () => {
@@ -330,6 +364,7 @@ btnCreateCareer.addEventListener("click", async () => {
         careerNameInput.value = "";
         await loadCareerList();
         currentCareerId = career.id;
+        currentCareerData = career;
         careerSelect.value = career.id;
         afterCareerLoaded(career);
         toast(`Carrera "${name}" creada`, "success");
@@ -350,12 +385,35 @@ btnLoadCareer.addEventListener("click", async () => {
     try {
         const career = await apiFetch(`/careers/${id}`);
         currentCareerId = id;
+        currentCareerData = career;
         afterCareerLoaded(career);
         toast(`Carrera "${career.name}" cargada`, "success");
     } catch (e) {
         toast("Error al cargar carrera: " + e.message, "error");
     } finally {
         setLoading(btnLoadCareer, false);
+    }
+});
+
+btnDeleteCareer.addEventListener("click", async () => {
+    if (!currentCareerId) return;
+    if (!confirm("¿Eliminar esta carrera y todas sus materias? Esta acción no se puede deshacer.")) return;
+    setLoading(btnDeleteCareer, true);
+    try {
+        const res = await apiFetch(`/careers/${currentCareerId}`, { method: "DELETE" });
+        currentCareerId = null;
+        currentCareerData = null;
+        document.getElementById("step-upload").classList.add("hidden");
+        document.getElementById("step-manage").classList.add("hidden");
+        document.getElementById("step-progress").classList.add("hidden");
+        subjectsContainer.innerHTML = '<p class="help">No hay materias cargadas aún.</p>';
+        progressContainer.innerHTML = "";
+        await loadCareerList();
+        toast(res.detail, "success");
+    } catch (e) {
+        toast("Error: " + e.message, "error");
+    } finally {
+        setLoading(btnDeleteCareer, false);
     }
 });
 
@@ -404,11 +462,11 @@ btnUploadPdf.addEventListener("click", async () => {
             let html = '<div class="alert alert-warning">';
             html += "<strong>No se pudieron detectar materias.</strong> El formato del PDF puede no ser compatible.";
             html += " Probá con la opción <strong>Texto</strong> o <strong>Manual</strong>.";
-            html += "</div>";
             if (data.raw_text) {
-                html += `<button class="raw-text-toggle" onclick="this.nextElementSibling.classList.toggle('hidden')">Ver texto extraído del PDF</button>`;
-                html += `<pre class="raw-text-block hidden">${escapeHtml(data.raw_text)}</pre>`;
+                html += '<br><br><details><summary class="raw-text-toggle">Ver texto extraído del PDF</summary>';
+                html += `<pre class="raw-text-block">${escapeHtml(data.raw_text)}</pre></details>`;
             }
+            html += "</div>";
             pdfStatus.innerHTML = html;
             pdfPreviewSection.classList.add("hidden");
             return;
@@ -419,7 +477,7 @@ btnUploadPdf.addEventListener("click", async () => {
         pdfPreviewSection.classList.remove("hidden");
         toast(`${parsedSubjects.length} materias detectadas en el PDF`, "success");
     } catch (e) {
-        pdfStatus.innerHTML = `<div class="alert alert-error"><strong>Error:</strong> ${e.message}</div>`;
+        pdfStatus.innerHTML = `<div class="alert alert-error"><strong>Error:</strong> ${escapeHtml(e.message)}</div>`;
         toast("Error al procesar PDF: " + e.message, "error");
     } finally {
         setLoading(btnUploadPdf, false);
@@ -450,7 +508,7 @@ btnParseText.addEventListener("click", async () => {
         parsedFacultyName = data.faculty_name || "";
 
         if (!parsedSubjects || parsedSubjects.length === 0) {
-            textStatus.innerHTML = '<div class="alert alert-warning"><strong>No se pudieron detectar materias.</strong> Revisá que el texto tenga el formato correcto.</div>';
+            textStatus.innerHTML = '<div class="alert alert-warning"><strong>No se pudieron detectar materias.</strong> Revisá que el texto tenga el formato correcto. Probá con el formato manual.</div>';
             pdfPreviewSection.classList.add("hidden");
             return;
         }
@@ -460,7 +518,7 @@ btnParseText.addEventListener("click", async () => {
         pdfPreviewSection.classList.remove("hidden");
         toast(`${parsedSubjects.length} materias detectadas del texto`, "success");
     } catch (e) {
-        textStatus.innerHTML = `<div class="alert alert-error"><strong>Error:</strong> ${e.message}</div>`;
+        textStatus.innerHTML = `<div class="alert alert-error"><strong>Error:</strong> ${escapeHtml(e.message)}</div>`;
         toast("Error al parsear texto: " + e.message, "error");
     } finally {
         setLoading(btnParseText, false);
@@ -532,6 +590,7 @@ btnConfirmPdf.addEventListener("click", async () => {
         textStatus.innerHTML = "";
         pdfInput.value = "";
         textInput.value = "";
+        currentCareerData = career;
         afterCareerLoaded(career);
         toast(`${subjects.length} materias guardadas`, "success");
     } catch (e) {
@@ -574,6 +633,7 @@ btnUploadJson.addEventListener("click", async () => {
             body: JSON.stringify({ name: "", faculty_name: "", subjects: data }),
         });
         jsonInput.value = "";
+        currentCareerData = career;
         afterCareerLoaded(career);
         toast(`${data.length} materias cargadas desde JSON`, "success");
     } catch (e) {
@@ -615,6 +675,7 @@ btnAddSubject.addEventListener("click", async () => {
         subjYear.value = "";
         subjSemester.value = "";
         subjPrereqs.value = "";
+        currentCareerData = career;
         afterCareerLoaded(career);
         toast(`"${name}" agregada`, "success");
     } catch (e) {
@@ -639,6 +700,64 @@ function computeAvailability(subjects) {
     return result;
 }
 
+// --- Inline subject editing ---
+function startEditSubject(card, subject) {
+    if (card.querySelector(".edit-mode")) return;
+    const origHTML = card.innerHTML;
+    card.dataset.origHTML = origHTML;
+
+    const prereqStr = (subject.prerequisites || []).join(", ");
+    card.innerHTML = `
+        <div class="edit-mode">
+            <input type="text" class="edit-name" value="${escapeHtml(subject.name)}" placeholder="Nombre">
+            <div class="edit-row">
+                <input type="number" class="edit-year" value="${subject.year}" min="1" placeholder="Año">
+                <input type="number" class="edit-sem" value="${subject.semester}" min="1" max="2" placeholder="Sem.">
+            </div>
+            <input type="text" class="edit-prereqs" value="${escapeHtml(prereqStr)}" placeholder="Correlativas">
+            <div class="edit-actions">
+                <button class="btn-edit-save btn-small success">Guardar</button>
+                <button class="btn-edit-cancel btn-small secondary">Cancelar</button>
+            </div>
+        </div>
+    `;
+
+    card.querySelector(".btn-edit-save").addEventListener("click", async () => {
+        const newName = card.querySelector(".edit-name").value.trim();
+        const newYear = parseInt(card.querySelector(".edit-year").value);
+        const newSem = parseInt(card.querySelector(".edit-sem").value);
+        const newPrereqs = card.querySelector(".edit-prereqs").value
+            .split(",").map((s) => s.trim()).filter(Boolean);
+
+        if (!newName || !newYear || !newSem) {
+            toast("Completá nombre, año y semestre", "warning");
+            return;
+        }
+
+        try {
+            await apiFetch(`/subjects/${subject.id}/edit`, {
+                method: "PUT",
+                body: JSON.stringify({
+                    name: newName,
+                    year: newYear,
+                    semester: newSem,
+                    prerequisites: newPrereqs,
+                }),
+            });
+            const career = await apiFetch(`/careers/${currentCareerId}`);
+            currentCareerData = career;
+            toast("Materia actualizada", "success");
+            renderSubjects(career.subjects);
+        } catch (e) {
+            toast("Error: " + e.message, "error");
+        }
+    });
+
+    card.querySelector(".btn-edit-cancel").addEventListener("click", () => {
+        card.innerHTML = card.dataset.origHTML;
+    });
+}
+
 // --- Render subjects ---
 function renderSubjects(subjects) {
     if (!subjects || subjects.length === 0) {
@@ -649,8 +768,12 @@ function renderSubjects(subjects) {
 
     const enriched = computeAvailability(subjects);
 
+    const filtered = statusFilter
+        ? enriched.filter((s) => s.status === statusFilter)
+        : enriched;
+
     const byYear = {};
-    enriched.forEach((s) => {
+    filtered.forEach((s) => {
         const key = `Año ${s.year}`;
         if (!byYear[key]) byYear[key] = [];
         byYear[key].push(s);
@@ -665,6 +788,9 @@ function renderSubjects(subjects) {
     };
 
     let html = "";
+    if (filtered.length < enriched.length) {
+        html += `<p class="help" style="margin-bottom: 8px;">Mostrando ${filtered.length} de ${enriched.length} materias</p>`;
+    }
     for (const [year, subs] of Object.entries(byYear)) {
         html += `<div class="year-section"><h3>${year}</h3><div class="subjects-grid">`;
         subs.forEach((s) => {
@@ -686,19 +812,31 @@ function renderSubjects(subjects) {
                     <div class="meta">${year} · Semestre ${s.semester}</div>
                     <div class="prereqs">${prereqText}</div>
                     ${blockedHint}
-                    <select class="status-select" data-id="${s.id}" ${disabled}>
-                        ${Object.entries(statusLabels)
-                            .map(([val, label]) =>
-                                `<option value="${val}" ${s.status === val ? "selected" : ""}>${label}</option>`
-                            )
-                            .join("")}
-                    </select>
+                    <div class="card-controls">
+                        <select class="status-select" data-id="${s.id}" ${disabled}>
+                            ${Object.entries(statusLabels)
+                                .map(([val, label]) =>
+                                    `<option value="${val}" ${s.status === val ? "selected" : ""}>${label}</option>`
+                                )
+                                .join("")}
+                        </select>
+                        <div class="card-actions">
+                            <button class="btn-edit btn-small secondary" data-id="${s.id}" title="Editar">✏️</button>
+                            <button class="btn-delete-subj btn-small danger" data-id="${s.id}" title="Eliminar">🗑️</button>
+                        </div>
+                    </div>
                 </div>`;
         });
         html += "</div></div>";
     }
+
+    if (filtered.length === 0 && statusFilter) {
+        html = `<p class="help">No hay materias con estado "${statusLabels[statusFilter] || statusFilter}".</p>`;
+    }
+
     subjectsContainer.innerHTML = html;
 
+    // Status change
     document.querySelectorAll(".status-select").forEach((sel) => {
         sel.addEventListener("change", async (e) => {
             const id = parseInt(e.target.dataset.id);
@@ -720,10 +858,46 @@ function renderSubjects(subjects) {
                     body: JSON.stringify({ status }),
                 });
                 const career = await apiFetch(`/careers/${currentCareerId}`);
+                currentCareerData = career;
                 renderProgress(currentCareerId);
                 renderSubjects(career.subjects);
             } catch (err) {
                 toast("Error al actualizar estado: " + err.message, "error");
+            }
+        });
+    });
+
+    // Edit button
+    document.querySelectorAll(".btn-edit").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+            const id = parseInt(e.target.dataset.id);
+            const career = currentCareerData;
+            if (!career) return;
+            const subject = career.subjects.find((s) => s.id === id);
+            if (!subject) return;
+            const card = e.target.closest(".subject-card");
+            startEditSubject(card, subject);
+        });
+    });
+
+    // Delete subject
+    document.querySelectorAll(".btn-delete-subj").forEach((btn) => {
+        btn.addEventListener("click", async (e) => {
+            const id = parseInt(e.target.dataset.id);
+            const career = currentCareerData;
+            if (!career) return;
+            const subject = career.subjects.find((s) => s.id === id);
+            if (!subject) return;
+            if (!confirm(`¿Eliminar "${subject.name}"?`)) return;
+            try {
+                const res = await apiFetch(`/subjects/${id}`, { method: "DELETE" });
+                const updated = await apiFetch(`/careers/${currentCareerId}`);
+                currentCareerData = updated;
+                renderSubjects(updated.subjects);
+                renderProgress(currentCareerId);
+                toast(res.detail, "success");
+            } catch (err) {
+                toast("Error: " + err.message, "error");
             }
         });
     });
@@ -793,6 +967,158 @@ async function renderProgress(careerId) {
         progressContainer.innerHTML = `<div class="alert alert-error">Error al cargar progreso: ${e.message}</div>`;
     }
 }
+
+// --- Admin Dashboard ---
+
+const stepAdmin = document.getElementById("step-admin");
+
+function showAdminDashboard() {
+    if (currentUser && currentUser.role === "admin") {
+        stepAdmin.classList.remove("hidden");
+        loadAdminUsers();
+        loadAdminCareers();
+        loadAdminServerStats();
+    } else {
+        stepAdmin.classList.add("hidden");
+    }
+}
+
+// Admin tabs
+document.querySelectorAll(".admin-tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+        document.querySelectorAll(".admin-tab").forEach((t) => t.classList.remove("active"));
+        tab.classList.add("active");
+        const section = tab.dataset.admin;
+        document.getElementById("admin-users").classList.toggle("hidden", section !== "users");
+        document.getElementById("admin-careers").classList.toggle("hidden", section !== "careers");
+        document.getElementById("admin-server").classList.toggle("hidden", section !== "server");
+    });
+});
+
+async function loadAdminUsers() {
+    const container = document.getElementById("admin-users-content");
+    try {
+        const users = await apiFetch("/admin/users");
+        let html = `<table class="admin-table">
+            <thead><tr>
+                <th>ID</th>
+                <th>Usuario</th>
+                <th>Rol</th>
+                <th>Registro</th>
+            </tr></thead><tbody>`;
+        users.forEach((u) => {
+            const date = u.created_at ? new Date(u.created_at).toLocaleDateString() : "-";
+            html += `<tr>
+                <td>${u.id}</td>
+                <td>${escapeHtml(u.username)}</td>
+                <td><span class="role-badge role-${u.role}">${u.role}</span></td>
+                <td>${date}</td>
+            </tr>`;
+        });
+        html += "</tbody></table>";
+        container.innerHTML = html;
+    } catch (e) {
+        container.innerHTML = `<div class="alert alert-error">Error: ${escapeHtml(e.message)}</div>`;
+    }
+}
+
+async function loadAdminCareers() {
+    const container = document.getElementById("admin-careers-content");
+    try {
+        const careers = await apiFetch("/admin/careers");
+        let html = `<table class="admin-table">
+            <thead><tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>Facultad</th>
+                <th>Materias</th>
+            </tr></thead><tbody>`;
+        careers.forEach((c) => {
+            html += `<tr>
+                <td>${c.id}</td>
+                <td>${escapeHtml(c.name)}</td>
+                <td>${escapeHtml(c.faculty_name || "-")}</td>
+                <td>${c.subject_count}</td>
+            </tr>`;
+        });
+        html += "</tbody></table>";
+        if (careers.length === 0) {
+            html = '<p class="help">No hay carreras registradas.</p>';
+        }
+        container.innerHTML = html;
+    } catch (e) {
+        container.innerHTML = `<div class="alert alert-error">Error: ${escapeHtml(e.message)}</div>`;
+    }
+}
+
+async function loadAdminServerStats() {
+    const container = document.getElementById("admin-server-content");
+    try {
+        const s = await apiFetch("/admin/server-stats");
+
+        function uptimeStr(seconds) {
+            const d = Math.floor(seconds / 86400);
+            const h = Math.floor((seconds % 86400) / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            return `${d}d ${h}h ${m}m`;
+        }
+
+        container.innerHTML = `
+            <div class="server-stats">
+                <div class="server-card cpu">
+                    <div class="server-icon">⚡</div>
+                    <div class="server-value">${s.cpu_percent}%</div>
+                    <div class="server-label">CPU</div>
+                </div>
+                <div class="server-card ram">
+                    <div class="server-icon">🧠</div>
+                    <div class="server-value">${s.memory_percent}%</div>
+                    <div class="server-label">RAM (${s.memory_used_mb} / ${s.memory_total_mb} MB)</div>
+                </div>
+                <div class="server-card disk">
+                    <div class="server-icon">💾</div>
+                    <div class="server-value">${s.disk_percent}%</div>
+                    <div class="server-label">Disco (${s.disk_used_gb} / ${s.disk_total_gb} GB)</div>
+                </div>
+                <div class="server-card uptime">
+                    <div class="server-icon">⏱️</div>
+                    <div class="server-value">${uptimeStr(s.uptime_seconds)}</div>
+                    <div class="server-label">Activo</div>
+                </div>
+            </div>
+            <div class="server-info">
+                <span>Python ${s.python_version}</span>
+                <span>${s.platform}</span>
+            </div>
+            <div class="server-bar-container">
+                <div class="server-bar-label">CPU</div>
+                <div class="server-bar"><div class="server-bar-fill cpu-fill" style="width:${s.cpu_percent}%"></div></div>
+            </div>
+            <div class="server-bar-container">
+                <div class="server-bar-label">RAM</div>
+                <div class="server-bar"><div class="server-bar-fill ram-fill" style="width:${s.memory_percent}%"></div></div>
+            </div>
+            <div class="server-bar-container">
+                <div class="server-bar-label">Disco</div>
+                <div class="server-bar"><div class="server-bar-fill disk-fill" style="width:${s.disk_percent}%"></div></div>
+            </div>
+        `;
+    } catch (e) {
+        container.innerHTML = `<div class="alert alert-error">Error: ${escapeHtml(e.message)}</div>`;
+    }
+}
+
+document.getElementById("btn-refresh-server").addEventListener("click", () => {
+    document.getElementById("admin-server-content").innerHTML = '<p class="help">Actualizando...</p>';
+    loadAdminServerStats();
+});
+
+// Patch afterCareerLoaded to show admin dashboard
+const origAfterCareerLoaded = afterCareerLoaded;
+afterCareerLoaded = function(career) {
+    origAfterCareerLoaded(career);
+    showAdminDashboard();
+};
 
 // --- Init ---
 (async function init() {
