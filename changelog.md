@@ -3,6 +3,7 @@
 ## [2026-06-28] Admin dashboard
 
 ### Realizado
+- **BD**: base de datos limpiada (`correlativas.db` eliminada) para evitar conflictos de esquema con la versión anterior
 - **Backend**: nuevos endpoints protegidos para admin — `GET /api/admin/users` (lista todos los usuarios con rol y fecha), `GET /api/admin/careers` (lista carreras con cantidad de materias), `GET /api/admin/server-stats` (CPU, RAM, disco, uptime, versión Python y plataforma)
 - **Backend**: agregado `psutil` a dependencias para recolectar estadísticas del servidor
 - **Backend**: `DATABASE_URL` configurable por variable de entorno (con fallback a SQLite)
