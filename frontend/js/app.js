@@ -1098,12 +1098,11 @@ document.getElementById("btn-export-progress").addEventListener("click", async (
     }
 });
 
-// --- Weekly schedule ---
+// --- Plan semanal (progreso detallado) ---
 function renderSchedule(subjects) {
     const container = document.getElementById("schedule-container");
     const enriched = computeAvailability(subjects);
 
-    // Find current subjects: "cursando" or available "no_cursada" subjects in the earliest incomplete year
     const byYear = {};
     enriched.forEach((s) => {
         const key = s.year;
@@ -1114,7 +1113,40 @@ function renderSchedule(subjects) {
     const sortedYears = Object.keys(byYear).sort();
     const statusLabels = { no_cursada: "No cursada", cursando: "Cursando", regular: "Regular", aprobado: "Aprobado", promocionado: "Promocionado" };
 
-    let html = '<div class="schedule-grid">';
+    let total = enriched.length;
+    let aprobadas = enriched.filter(s => s.status === "aprobado" || s.status === "promocionado").length;
+    let pct = total > 0 ? Math.round((aprobadas / total) * 100) : 0;
+
+    let html = `
+        <div class="progress-stats">
+            <div class="stat-card promocionado">
+                <div class="number">${enriched.filter(s => s.status === "promocionado").length}</div>
+                <div class="label">Promocionado</div>
+            </div>
+            <div class="stat-card aprobado">
+                <div class="number">${enriched.filter(s => s.status === "aprobado").length}</div>
+                <div class="label">Aprobado</div>
+            </div>
+            <div class="stat-card regular">
+                <div class="number">${enriched.filter(s => s.status === "regular").length}</div>
+                <div class="label">Regular</div>
+            </div>
+            <div class="stat-card cursando">
+                <div class="number">${enriched.filter(s => s.status === "cursando").length}</div>
+                <div class="label">Cursando</div>
+            </div>
+            <div class="stat-card no_cursada">
+                <div class="number">${enriched.filter(s => s.status === "no_cursada").length}</div>
+                <div class="label">No cursada</div>
+            </div>
+        </div>
+        <div class="progress-bar-container">
+            <div class="progress-bar-fill" style="width: ${Math.max(pct, 4)}%"></div>
+            <div class="progress-bar-text">${pct}%</div>
+        </div>
+        <div class="progress-summary">${aprobadas} de ${total} materias aprobadas</div>
+        <hr>
+        <div class="schedule-grid">`;
 
     for (const year of sortedYears) {
         const sem1 = byYear[year].filter((s) => s.semester === 1);
@@ -1128,9 +1160,15 @@ function renderSchedule(subjects) {
                     ${sem1.length === 0 ? '<p class="help">Sin materias</p>' : ''}
                     ${sem1.map((s) => {
                         const locked = !s.available && s.status === "no_cursada";
+                        const prereqStr = s.prerequisites.length
+                            ? '<span class="schedule-prereqs">📎 ' + s.prerequisites.join(", ") + '</span>'
+                            : '';
                         return `<div class="schedule-subject ${s.status} ${locked ? 'locked' : ''}">
-                            <div class="schedule-subj-name">${escapeHtml(s.name)}</div>
-                            <div class="schedule-subj-status">${statusLabels[s.status] || s.status}</div>
+                            <div class="schedule-subj-info">
+                                <span class="schedule-subj-name">${escapeHtml(s.name)}</span>
+                                ${prereqStr}
+                            </div>
+                            <span class="schedule-subj-status badge-${s.status}">${statusLabels[s.status] || s.status}</span>
                         </div>`;
                     }).join("")}
                 </div>
@@ -1139,9 +1177,15 @@ function renderSchedule(subjects) {
                     ${sem2.length === 0 ? '<p class="help">Sin materias</p>' : ''}
                     ${sem2.map((s) => {
                         const locked = !s.available && s.status === "no_cursada";
+                        const prereqStr = s.prerequisites.length
+                            ? '<span class="schedule-prereqs">📎 ' + s.prerequisites.join(", ") + '</span>'
+                            : '';
                         return `<div class="schedule-subject ${s.status} ${locked ? 'locked' : ''}">
-                            <div class="schedule-subj-name">${escapeHtml(s.name)}</div>
-                            <div class="schedule-subj-status">${statusLabels[s.status] || s.status}</div>
+                            <div class="schedule-subj-info">
+                                <span class="schedule-subj-name">${escapeHtml(s.name)}</span>
+                                ${prereqStr}
+                            </div>
+                            <span class="schedule-subj-status badge-${s.status}">${statusLabels[s.status] || s.status}</span>
                         </div>`;
                     }).join("")}
                 </div>
@@ -1152,6 +1196,11 @@ function renderSchedule(subjects) {
     html += "</div>";
     container.innerHTML = html;
 }
+
+// --- Export PDF (via print) ---
+document.getElementById("btn-export-pdf").addEventListener("click", () => {
+    window.print();
+});
 
 // --- Render progress ---
 async function renderProgress(careerId) {
