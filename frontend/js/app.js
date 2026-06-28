@@ -1,7 +1,7 @@
 const API = "http://localhost:8000/api";
 
 // --- Auth state ---
-let token = localStorage.getItem("token") || null;
+let token = sessionStorage.getItem("token") || null;
 let currentUser = null;
 let currentCareerId = null;
 let parsedSubjects = null;
@@ -35,7 +35,7 @@ async function apiFetch(url, options = {}) {
         headers,
     });
     if (res.status === 401 || res.status === 403) {
-        localStorage.removeItem("token");
+        sessionStorage.removeItem("token");
         token = null;
         currentUser = null;
         showAuth();
@@ -90,7 +90,7 @@ async function tryRestoreSession() {
         loadCareerList();
         return true;
     } catch {
-        localStorage.removeItem("token");
+        sessionStorage.removeItem("token");
         token = null;
         return false;
     }
@@ -155,7 +155,7 @@ document.getElementById("btn-login").addEventListener("click", async () => {
         const data = await res.json();
         token = data.token;
         currentUser = { id: data.user_id, username: data.username, role: data.role };
-        localStorage.setItem("token", token);
+        sessionStorage.setItem("token", token);
         document.getElementById("login-username").value = "";
         document.getElementById("login-password").value = "";
         showApp();
@@ -194,7 +194,7 @@ document.getElementById("btn-register").addEventListener("click", async () => {
         const data = await res.json();
         token = data.token;
         currentUser = { id: data.user_id, username: data.username, role: data.role };
-        localStorage.setItem("token", token);
+        sessionStorage.setItem("token", token);
         document.getElementById("register-username").value = "";
         document.getElementById("register-password").value = "";
         showApp();
@@ -210,7 +210,7 @@ document.getElementById("btn-register").addEventListener("click", async () => {
 
 // --- Logout ---
 document.getElementById("btn-logout").addEventListener("click", () => {
-    localStorage.removeItem("token");
+    sessionStorage.removeItem("token");
     token = null;
     currentUser = null;
     currentCareerId = null;

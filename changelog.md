@@ -8,8 +8,11 @@
 - **Parser**: umbral `_is_continuation_line` cambiado de `< 12` a `<= 12` para capturar palabras como "Programación" (12 caracteres)
 - **Parser**: `looks_like_faculty_table` — regex corregido para no consumir "Anual"/"Cuatrimestral" con `\S+`
 - **Parser**: `detect_faculty_name` — filtra líneas de encabezado de tabla (COD, CARGA, etc.) y no las incluye en el nombre de facultad; regex ampliado para incluir caracteres acentuados (ÁÉÍÓÚÜÑ)
+- **PDF**: lectura correcta de materias desde archivos PDF comprobada con formato tabular UNAM/FCEQyN
+- **Frontend**: esquema de colores rediseñado — paleta ámbar sobre fondo oscuro, sin gradientes genéricos, aspecto más limpio y profesional
 - **Frontend**: buscador de carreras rediseñado con contenedor integrado, ícono de búsqueda y borde que resalta al enfocar
-- **Frontend**: navegación por tecla Enter en formularios de login/register — Enter en usuario mueve a contraseña, Enter en contraseña envía
+- **Frontend**: navegación por tecla Enter en formularios de login/register
+- **Frontend**: sesión efímera (sessionStorage en lugar de localStorage) — al cerrar la pestaña se requiere login nuevamente
 
 ## [2026-06-28] Frontend: rediseño completo
 
