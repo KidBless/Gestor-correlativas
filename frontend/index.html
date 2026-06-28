@@ -52,6 +52,7 @@
                         <p>Seguí tu avance en la carrera</p>
                     </div>
                     <div class="header-right">
+                        <button id="btn-admin" class="secondary btn-small hidden">Panel Admin</button>
                         <button id="btn-logout" class="secondary btn-small hidden">Cerrar sesión</button>
                     </div>
                 </div>
@@ -187,10 +188,15 @@ Física I (correlativas: Análisis Matemático I, Álgebra)'></textarea>
                     <h2><span class="step-num">4</span> Avance</h2>
                     <div id="progress-container"></div>
                 </section>
+            </main>
 
-                <!-- Step 5: Admin Dashboard -->
-                <section id="step-admin" class="hidden">
-                    <h2><span class="step-num">5</span> Administración</h2>
+            <!-- Admin Dashboard (toggleable, outside step flow) -->
+            <div id="admin-section" class="hidden">
+                <section>
+                    <div class="admin-section-header">
+                        <h2>Panel de Administración</h2>
+                        <button id="btn-close-admin" class="secondary btn-small">Cerrar</button>
+                    </div>
                     <div class="admin-tabs">
                         <button class="admin-tab active" data-admin="users">Usuarios</button>
                         <button class="admin-tab" data-admin="careers">Carreras</button>
@@ -207,7 +213,7 @@ Física I (correlativas: Análisis Matemático I, Álgebra)'></textarea>
                         <button id="btn-refresh-server" class="secondary btn-small">Actualizar</button>
                     </div>
                 </section>
-            </main>
+            </div>
         </div>
     </div>
 

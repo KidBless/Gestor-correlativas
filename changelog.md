@@ -12,7 +12,7 @@
   - Usuarios: tabla con ID, username, badge de rol, fecha de registro
   - Carreras: tabla con ID, nombre, facultad, cantidad de materias
   - Servidor: cards con CPU/RAM/Disco/Uptime + barras de uso + botón Actualizar
-- **Frontend**: la sección admin aparece al iniciar sesión y al cargar una carrera; se oculta al cerrar sesión
+- **Frontend**: la sección admin ahora está fuera del flujo de pasos, se abre/cierra con el botón "Panel Admin" en el header (visible solo para admin)
 
 ## [2026-06-28] Correcciones en parser, buscador y UX
 

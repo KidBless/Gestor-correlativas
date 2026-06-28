@@ -283,6 +283,26 @@ button.secondary:hover {
     background: var(--border);
 }
 
+button.danger {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+button.danger:hover {
+    background: rgba(239, 68, 68, 0.35);
+}
+
+#btn-admin {
+    background: rgba(139, 92, 246, 0.2);
+    color: #c4b5fd;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+#btn-admin:hover {
+    background: rgba(139, 92, 246, 0.35);
+}
+
 button.success {
     background: var(--success);
 }
@@ -781,6 +801,28 @@ button.success:hover {
 
 .toast-close:hover {
     opacity: 1;
+}
+
+/* --- Admin Dashboard (outside step flow) --- */
+
+#admin-section {
+    margin-top: 20px;
+}
+
+#admin-section section {
+    border-color: var(--primary);
+    border-width: 1px 1px 1px 3px;
+}
+
+.admin-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.admin-section-header h2 {
+    margin-bottom: 0;
 }
 
 /* --- Admin Dashboard --- */

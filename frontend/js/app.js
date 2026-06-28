@@ -84,7 +84,7 @@ function showApp() {
         badge.innerHTML = `${currentUser.username} <span class="role-badge role-${currentUser.role}">${roleText}</span>`;
         badge.classList.remove("hidden");
         document.getElementById("btn-logout").classList.remove("hidden");
-        showAdminDashboard();
+        document.getElementById("btn-admin").classList.toggle("hidden", currentUser.role !== "admin");
     }
 }
 
@@ -238,7 +238,8 @@ document.getElementById("btn-logout").addEventListener("click", () => {
     document.getElementById("step-upload").classList.add("hidden");
     document.getElementById("step-manage").classList.add("hidden");
     document.getElementById("step-progress").classList.add("hidden");
-    document.getElementById("step-admin").classList.add("hidden");
+    document.getElementById("admin-section").classList.add("hidden");
+    document.getElementById("btn-admin").classList.add("hidden");
     showAuth();
     toast("Sesión cerrada", "info");
 });
@@ -968,20 +969,25 @@ async function renderProgress(careerId) {
     }
 }
 
-// --- Admin Dashboard ---
+// --- Admin Dashboard (toggleable) ---
 
-const stepAdmin = document.getElementById("step-admin");
+const adminSection = document.getElementById("admin-section");
+let adminLoaded = false;
 
-function showAdminDashboard() {
-    if (currentUser && currentUser.role === "admin") {
-        stepAdmin.classList.remove("hidden");
+document.getElementById("btn-admin").addEventListener("click", () => {
+    const isOpen = !adminSection.classList.contains("hidden");
+    adminSection.classList.toggle("hidden");
+    if (!isOpen && !adminLoaded) {
+        adminLoaded = true;
         loadAdminUsers();
         loadAdminCareers();
         loadAdminServerStats();
-    } else {
-        stepAdmin.classList.add("hidden");
     }
-}
+});
+
+document.getElementById("btn-close-admin").addEventListener("click", () => {
+    adminSection.classList.add("hidden");
+});
 
 // Admin tabs
 document.querySelectorAll(".admin-tab").forEach((tab) => {
@@ -1112,13 +1118,6 @@ document.getElementById("btn-refresh-server").addEventListener("click", () => {
     document.getElementById("admin-server-content").innerHTML = '<p class="help">Actualizando...</p>';
     loadAdminServerStats();
 });
-
-// Patch afterCareerLoaded to show admin dashboard
-const origAfterCareerLoaded = afterCareerLoaded;
-afterCareerLoaded = function(career) {
-    origAfterCareerLoaded(career);
-    showAdminDashboard();
-};
 
 // --- Init ---
 (async function init() {
