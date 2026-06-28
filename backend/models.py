@@ -75,3 +75,17 @@ class UserSubject(Base):
 
     user = relationship("User", back_populates="subjects")
     subject = relationship("Subject", back_populates="user_statuses")
+
+
+class StatusChangeLog(Base):
+    __tablename__ = "status_change_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False)
+    old_status = Column(String, nullable=True)
+    new_status = Column(String, nullable=False)
+    changed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    user = relationship("User")
+    subject = relationship("Subject")

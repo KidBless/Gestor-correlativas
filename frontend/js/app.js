@@ -9,6 +9,37 @@ let parsedSubjects = null;
 let parsedFacultyName = "";
 let statusFilter = "";
 
+// --- Confirm before leaving if changes might be lost ---
+window.addEventListener("beforeunload", (e) => {
+    if (currentUser) {
+        e.preventDefault();
+        e.returnValue = "";
+    }
+});
+
+// --- Theme toggle ---
+let darkTheme = localStorage.getItem("theme") !== "light";
+function applyTheme() {
+    document.documentElement.setAttribute("data-theme", darkTheme ? "dark" : "light");
+    document.getElementById("btn-theme").textContent = darkTheme ? "🌙" : "☀️";
+}
+document.getElementById("btn-theme").addEventListener("click", () => {
+    darkTheme = !darkTheme;
+    localStorage.setItem("theme", darkTheme ? "dark" : "light");
+    applyTheme();
+});
+applyTheme();
+
+// --- Auto token refresh every 30 min ---
+setInterval(async () => {
+    if (!token) return;
+    try {
+        const data = await apiFetch("/auth/refresh");
+        token = data.token;
+        sessionStorage.setItem("token", token);
+    } catch {}
+}, 30 * 60 * 1000);
+
 // --- Toast system ---
 function toast(message, type = "info") {
     const container = document.getElementById("toast-container");
@@ -84,6 +115,7 @@ function showApp() {
         badge.innerHTML = `${currentUser.username} <span class="role-badge role-${currentUser.role}">${roleText}</span>`;
         badge.classList.remove("hidden");
         document.getElementById("btn-logout").classList.remove("hidden");
+        document.getElementById("btn-password").classList.remove("hidden");
         document.getElementById("btn-admin").classList.toggle("hidden", currentUser.role !== "admin");
     }
 }
@@ -238,10 +270,51 @@ document.getElementById("btn-logout").addEventListener("click", () => {
     document.getElementById("step-upload").classList.add("hidden");
     document.getElementById("step-manage").classList.add("hidden");
     document.getElementById("step-progress").classList.add("hidden");
+    document.getElementById("step-schedule").classList.add("hidden");
     document.getElementById("admin-section").classList.add("hidden");
+    document.getElementById("profile-section").classList.add("hidden");
     document.getElementById("btn-admin").classList.add("hidden");
     showAuth();
     toast("Sesión cerrada", "info");
+});
+
+// --- Password change ---
+const profileSection = document.getElementById("profile-section");
+document.getElementById("btn-password").addEventListener("click", () => {
+    profileSection.classList.toggle("hidden");
+    document.getElementById("pwd-status").innerHTML = "";
+});
+document.getElementById("btn-close-password").addEventListener("click", () => {
+    profileSection.classList.add("hidden");
+});
+document.getElementById("btn-save-password").addEventListener("click", async () => {
+    const oldPwd = document.getElementById("pwd-old").value;
+    const newPwd = document.getElementById("pwd-new").value;
+    const confirm = document.getElementById("pwd-confirm").value;
+    if (!oldPwd || !newPwd || !confirm) {
+        document.getElementById("pwd-status").innerHTML = '<div class="alert alert-warning">Completá todos los campos</div>';
+        return;
+    }
+    if (newPwd.length < 4) {
+        document.getElementById("pwd-status").innerHTML = '<div class="alert alert-warning">La contraseña debe tener al menos 4 caracteres</div>';
+        return;
+    }
+    if (newPwd !== confirm) {
+        document.getElementById("pwd-status").innerHTML = '<div class="alert alert-error">Las contraseñas no coinciden</div>';
+        return;
+    }
+    try {
+        const res = await apiFetch("/auth/password", {
+            method: "PUT",
+            body: JSON.stringify({ old_password: oldPwd, new_password: newPwd }),
+        });
+        document.getElementById("pwd-status").innerHTML = `<div class="alert alert-success">${res.detail}</div>`;
+        document.getElementById("pwd-old").value = "";
+        document.getElementById("pwd-new").value = "";
+        document.getElementById("pwd-confirm").value = "";
+    } catch (e) {
+        document.getElementById("pwd-status").innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`;
+    }
 });
 
 // --- DOM refs ---
@@ -407,6 +480,7 @@ btnDeleteCareer.addEventListener("click", async () => {
         document.getElementById("step-upload").classList.add("hidden");
         document.getElementById("step-manage").classList.add("hidden");
         document.getElementById("step-progress").classList.add("hidden");
+        document.getElementById("step-schedule").classList.add("hidden");
         subjectsContainer.innerHTML = '<p class="help">No hay materias cargadas aún.</p>';
         progressContainer.innerHTML = "";
         await loadCareerList();
@@ -807,6 +881,12 @@ function startEditSubject(card, subject) {
     });
 }
 
+let subjectSearchTerm = "";
+document.getElementById("subject-search").addEventListener("input", () => {
+    subjectSearchTerm = document.getElementById("subject-search").value.trim().toLowerCase();
+    if (currentCareerData) renderSubjects(currentCareerData.subjects);
+});
+
 // --- Render subjects ---
 function renderSubjects(subjects) {
     if (!subjects || subjects.length === 0) {
@@ -817,9 +897,9 @@ function renderSubjects(subjects) {
 
     const enriched = computeAvailability(subjects);
 
-    const filtered = statusFilter
-        ? enriched.filter((s) => s.status === statusFilter)
-        : enriched;
+    let filtered = enriched;
+    if (statusFilter) filtered = filtered.filter((s) => s.status === statusFilter);
+    if (subjectSearchTerm) filtered = filtered.filter((s) => s.name.toLowerCase().includes(subjectSearchTerm));
 
     const byYear = {};
     filtered.forEach((s) => {
@@ -874,6 +954,7 @@ function renderSubjects(subjects) {
                                 .join("")}
                         </select>
                         <div class="card-actions">
+                            <button class="btn-history btn-small secondary" data-id="${s.id}" title="Historial">📋</button>
                             <button class="btn-edit btn-small secondary" data-id="${s.id}" title="Editar">✏️</button>
                             <button class="btn-delete-subj btn-small danger" data-id="${s.id}" title="Eliminar">🗑️</button>
                         </div>
@@ -885,6 +966,9 @@ function renderSubjects(subjects) {
 
     if (filtered.length === 0 && statusFilter) {
         html = `<p class="help">No hay materias con estado "${statusLabels[statusFilter] || statusFilter}".</p>`;
+    }
+    if (filtered.length === 0 && subjectSearchTerm && !statusFilter) {
+        html = `<p class="help">No hay materias que coincidan con "${escapeHtml(subjectSearchTerm)}".</p>`;
     }
 
     subjectsContainer.innerHTML = html;
@@ -954,6 +1038,119 @@ function renderSubjects(subjects) {
             }
         });
     });
+
+    // History button
+    document.querySelectorAll(".btn-history").forEach((btn) => {
+        btn.addEventListener("click", async (e) => {
+            const id = parseInt(e.target.dataset.id);
+            const career = currentCareerData;
+            if (!career) return;
+            const subject = career.subjects.find((s) => s.id === id);
+            if (!subject) return;
+            try {
+                const logs = await apiFetch(`/subjects/${id}/history`);
+                if (!logs.length) {
+                    toast("Sin cambios registrados", "info");
+                    return;
+                }
+                const lines = logs.slice().reverse().map((l) =>
+                    `[${new Date(l.changed_at).toLocaleString()}] ${l.old_status} → ${l.new_status}`
+                ).join("\n");
+                alert(`Historial de "${subject.name}":\n\n${lines}`);
+            } catch (err) {
+                toast("Error: " + err.message, "error");
+            }
+        });
+    });
+}
+
+// --- Reset progress ---
+document.getElementById("btn-reset-progress").addEventListener("click", async () => {
+    if (!currentCareerId) return;
+    if (!confirm("¿Resetear todo tu progreso en esta carrera? Todas las materias pasarán a 'No cursada'.")) return;
+    try {
+        await apiFetch(`/careers/${currentCareerId}/progress`, { method: "DELETE" });
+        const career = await apiFetch(`/careers/${currentCareerId}`);
+        currentCareerData = career;
+        renderSubjects(career.subjects);
+        renderProgress(currentCareerId);
+        toast("Progreso reseteado", "success");
+    } catch (err) {
+        toast("Error: " + err.message, "error");
+    }
+});
+
+// --- Export progress ---
+document.getElementById("btn-export-progress").addEventListener("click", async () => {
+    if (!currentCareerId) return;
+    try {
+        const p = await apiFetch(`/careers/${currentCareerId}/progress`);
+        const blob = new Blob([JSON.stringify(p, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "progreso.json";
+        a.click();
+        URL.revokeObjectURL(url);
+        toast("Progreso exportado", "success");
+    } catch (err) {
+        toast("Error: " + err.message, "error");
+    }
+});
+
+// --- Weekly schedule ---
+function renderSchedule(subjects) {
+    const container = document.getElementById("schedule-container");
+    const enriched = computeAvailability(subjects);
+
+    // Find current subjects: "cursando" or available "no_cursada" subjects in the earliest incomplete year
+    const byYear = {};
+    enriched.forEach((s) => {
+        const key = s.year;
+        if (!byYear[key]) byYear[key] = [];
+        byYear[key].push(s);
+    });
+
+    const sortedYears = Object.keys(byYear).sort();
+    const statusLabels = { no_cursada: "No cursada", cursando: "Cursando", regular: "Regular", aprobado: "Aprobado", promocionado: "Promocionado" };
+
+    let html = '<div class="schedule-grid">';
+
+    for (const year of sortedYears) {
+        const sem1 = byYear[year].filter((s) => s.semester === 1);
+        const sem2 = byYear[year].filter((s) => s.semester === 2);
+
+        html += `<div class="schedule-year-group">
+            <h3>Año ${year}</h3>
+            <div class="schedule-sem-row">
+                <div class="schedule-sem">
+                    <h4>Semestre 1</h4>
+                    ${sem1.length === 0 ? '<p class="help">Sin materias</p>' : ''}
+                    ${sem1.map((s) => {
+                        const locked = !s.available && s.status === "no_cursada";
+                        return `<div class="schedule-subject ${s.status} ${locked ? 'locked' : ''}">
+                            <div class="schedule-subj-name">${escapeHtml(s.name)}</div>
+                            <div class="schedule-subj-status">${statusLabels[s.status] || s.status}</div>
+                        </div>`;
+                    }).join("")}
+                </div>
+                <div class="schedule-sem">
+                    <h4>Semestre 2</h4>
+                    ${sem2.length === 0 ? '<p class="help">Sin materias</p>' : ''}
+                    ${sem2.map((s) => {
+                        const locked = !s.available && s.status === "no_cursada";
+                        return `<div class="schedule-subject ${s.status} ${locked ? 'locked' : ''}">
+                            <div class="schedule-subj-name">${escapeHtml(s.name)}</div>
+                            <div class="schedule-subj-status">${statusLabels[s.status] || s.status}</div>
+                        </div>`;
+                    }).join("")}
+                </div>
+            </div>
+        </div>`;
+    }
+
+    html += "</div>";
+    container.innerHTML = html;
 }
 
 // --- Render progress ---
@@ -1016,6 +1213,13 @@ async function renderProgress(careerId) {
         }
 
         progressContainer.innerHTML = html;
+
+        // Show schedule section
+        const scheduleSection = document.getElementById("step-schedule");
+        scheduleSection.classList.remove("hidden");
+        if (currentCareerData && currentCareerData.subjects) {
+            renderSchedule(currentCareerData.subjects);
+        }
     } catch (e) {
         progressContainer.innerHTML = `<div class="alert alert-error">Error al cargar progreso: ${e.message}</div>`;
     }
@@ -1063,18 +1267,61 @@ async function loadAdminUsers() {
                 <th>Usuario</th>
                 <th>Rol</th>
                 <th>Registro</th>
+                <th>Acciones</th>
             </tr></thead><tbody>`;
         users.forEach((u) => {
             const date = u.created_at ? new Date(u.created_at).toLocaleDateString() : "-";
-            html += `<tr>
+            const isSelf = currentUser && currentUser.id === u.id;
+            html += `<tr data-user-id="${u.id}">
                 <td>${u.id}</td>
                 <td>${escapeHtml(u.username)}</td>
                 <td><span class="role-badge role-${u.role}">${u.role}</span></td>
                 <td>${date}</td>
+                <td>
+                    ${isSelf
+                        ? '<span class="help">(vos)</span>'
+                        : `<button class="btn-admin-toggle-role btn-small secondary" data-id="${u.id}" data-role="${u.role}">Cambiar rol</button>
+                           <button class="btn-admin-delete-user btn-small danger" data-id="${u.id}">Eliminar</button>`
+                    }
+                </td>
             </tr>`;
         });
         html += "</tbody></table>";
         container.innerHTML = html;
+
+        // Bind admin user actions
+        container.querySelectorAll(".btn-admin-toggle-role").forEach((btn) => {
+            btn.addEventListener("click", async (e) => {
+                const id = parseInt(e.target.dataset.id);
+                const currentRole = e.target.dataset.role;
+                const newRole = currentRole === "admin" ? "user" : "admin";
+                if (!confirm(`¿Cambiar el rol del usuario #${id} a "${newRole}"?`)) return;
+                try {
+                    await apiFetch(`/admin/users/${id}`, {
+                        method: "PUT",
+                        body: JSON.stringify({ role: newRole }),
+                    });
+                    toast("Rol actualizado", "success");
+                    loadAdminUsers();
+                } catch (err) {
+                    toast("Error: " + err.message, "error");
+                }
+            });
+        });
+
+        container.querySelectorAll(".btn-admin-delete-user").forEach((btn) => {
+            btn.addEventListener("click", async (e) => {
+                const id = parseInt(e.target.dataset.id);
+                if (!confirm(`¿Eliminar usuario #${id} permanentemente?`)) return;
+                try {
+                    const res = await apiFetch(`/admin/users/${id}`, { method: "DELETE" });
+                    toast(res.detail, "success");
+                    loadAdminUsers();
+                } catch (err) {
+                    toast("Error: " + err.message, "error");
+                }
+            });
+        });
     } catch (e) {
         container.innerHTML = `<div class="alert alert-error">Error: ${escapeHtml(e.message)}</div>`;
     }

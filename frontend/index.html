@@ -52,6 +52,8 @@
                         <p>Seguí tu avance en la carrera</p>
                     </div>
                     <div class="header-right">
+                        <button id="btn-theme" class="secondary btn-small" title="Cambiar tema">🌙</button>
+                        <button id="btn-password" class="secondary btn-small hidden">🔑</button>
                         <button id="btn-admin" class="secondary btn-small hidden">Panel Admin</button>
                         <button id="btn-logout" class="secondary btn-small hidden">Cerrar sesión</button>
                     </div>
@@ -178,6 +180,10 @@ Física I (correlativas: Análisis Matemático I, Álgebra)'></textarea>
                             </select>
                         </span>
                     </h2>
+                    <div class="search-wrapper" style="margin-bottom:10px;">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="subject-search" placeholder="Buscar materia por nombre...">
+                    </div>
                     <div id="subjects-container">
                         <p class="help">No hay materias cargadas aún.</p>
                     </div>
@@ -187,8 +193,35 @@ Física I (correlativas: Análisis Matemático I, Álgebra)'></textarea>
                 <section id="step-progress" class="hidden">
                     <h2><span class="step-num">4</span> Avance</h2>
                     <div id="progress-container"></div>
+                    <div class="form-row" style="margin-top:12px;">
+                        <button id="btn-export-progress" class="secondary btn-small">📥 Exportar JSON</button>
+                        <button id="btn-reset-progress" class="danger btn-small">🔄 Resetear progreso</button>
+                    </div>
+                </section>
+
+                <!-- Weekly schedule -->
+                <section id="step-schedule" class="hidden">
+                    <h2><span class="step-num">5</span> Plan semanal</h2>
+                    <div id="schedule-container"></div>
                 </section>
             </main>
+
+            <!-- Profile / Password section -->
+            <div id="profile-section" class="hidden">
+                <section>
+                    <div class="admin-section-header">
+                        <h2>Cambiar contraseña</h2>
+                        <button id="btn-close-password" class="secondary btn-small">Cerrar</button>
+                    </div>
+                    <div class="form-row">
+                        <input type="password" id="pwd-old" placeholder="Contraseña actual">
+                        <input type="password" id="pwd-new" placeholder="Nueva contraseña">
+                        <input type="password" id="pwd-confirm" placeholder="Repetir nueva">
+                        <button id="btn-save-password">Guardar</button>
+                    </div>
+                    <div id="pwd-status"></div>
+                </section>
+            </div>
 
             <!-- Admin Dashboard (toggleable, outside step flow) -->
             <div id="admin-section" class="hidden">

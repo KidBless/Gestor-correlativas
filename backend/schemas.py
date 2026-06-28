@@ -154,3 +154,30 @@ class ServerStatsOut(BaseModel):
     uptime_seconds: float
     python_version: str
     platform: str
+
+
+# --- Profile ---
+
+class PasswordChange(BaseModel):
+    old_password: str
+    new_password: str
+
+
+# --- Status History ---
+
+class StatusChangeOut(BaseModel):
+    id: int
+    subject_id: int
+    subject_name: str = ""
+    old_status: Optional[str] = None
+    new_status: str
+    changed_at: str
+
+    class Config:
+        from_attributes = True
+
+
+# --- Admin user management ---
+
+class AdminUserUpdate(BaseModel):
+    role: Optional[str] = None

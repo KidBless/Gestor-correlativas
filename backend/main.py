@@ -26,9 +26,13 @@ from schemas import (
     AdminUserOut,
     AdminCareerOut,
     ServerStatsOut,
+    PasswordChange,
+    StatusChangeOut,
+    AdminUserUpdate,
 )
 from parser import parse_pdf
 from auth import hash_password, verify_password, create_token, get_current_user, require_admin
+from models import StatusChangeLog
 
 Base.metadata.create_all(bind=engine)
 
@@ -90,6 +94,26 @@ def me(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     if not db_user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     return UserOut(id=db_user.id, username=db_user.username, role=db_user.role)
+
+
+@app.put("/api/auth/password")
+def change_password(payload: PasswordChange, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.id == user["user_id"]).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    if not verify_password(payload.old_password, db_user.password_hash):
+        raise HTTPException(status_code=400, detail="Contraseña actual incorrecta")
+    if len(payload.new_password) < 4:
+        raise HTTPException(status_code=400, detail="La nueva contraseña debe tener al menos 4 caracteres")
+    db_user.password_hash = hash_password(payload.new_password)
+    db.commit()
+    return {"ok": True, "detail": "Contraseña actualizada"}
+
+
+@app.get("/api/auth/refresh")
+def refresh_token(user: dict = Depends(get_current_user)):
+    new_token = create_token(user["user_id"], user["role"])
+    return {"token": new_token}
 
 
 # --- PDF parse endpoint ---
@@ -254,10 +278,19 @@ def update_subject_status(
         .filter(UserSubject.user_id == user["user_id"], UserSubject.subject_id == subject_id)
         .first()
     )
+    old_status = us.status if us else "no_cursada"
     if not us:
         us = UserSubject(user_id=user["user_id"], subject_id=subject_id, status="no_cursada")
         db.add(us)
     us.status = payload.status
+    # Log the change
+    log = StatusChangeLog(
+        user_id=user["user_id"],
+        subject_id=subject_id,
+        old_status=old_status,
+        new_status=payload.status,
+    )
+    db.add(log)
     db.commit()
     db.refresh(us)
     return _subject_to_user_out(subject, us.status, db)
@@ -279,17 +312,25 @@ def edit_subject(
     subject.year = payload.year
     subject.semester = payload.semester
 
+    # Check circular dependencies before updating
+    all_map = {
+        s.name: s
+        for s in db.query(Subject).filter(Subject.career_id == subject.career_id).all()
+    }
+    for prereq_name in payload.prerequisites:
+        prereq = all_map.get(prereq_name)
+        if prereq and _has_circular_path(prereq, subject, set()):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Agregar '{prereq_name}' crea una dependencia circular"
+            )
+
     # Update prerequisites
     subject.prerequisites = []
-    if payload.prerequisites:
-        all_map = {
-            s.name: s
-            for s in db.query(Subject).filter(Subject.career_id == subject.career_id).all()
-        }
-        for prereq_name in payload.prerequisites:
-            prereq = all_map.get(prereq_name)
-            if prereq and prereq.id != subject.id:
-                subject.prerequisites.append(prereq)
+    for prereq_name in payload.prerequisites:
+        prereq = all_map.get(prereq_name)
+        if prereq and prereq.id != subject.id:
+            subject.prerequisites.append(prereq)
 
     subject.prerequisites_regular_only = list(payload.prerequisites_regular_only or [])
 
@@ -318,6 +359,59 @@ def delete_subject(
     db.delete(subject)
     db.commit()
     return {"ok": True, "detail": f'"{name}" eliminada'}
+
+
+@app.get("/api/subjects/{subject_id}/history", response_model=List[StatusChangeOut])
+def get_subject_history(
+    subject_id: int,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    logs = (
+        db.query(StatusChangeLog)
+        .filter(
+            StatusChangeLog.user_id == user["user_id"],
+            StatusChangeLog.subject_id == subject_id,
+        )
+        .order_by(StatusChangeLog.changed_at.desc())
+        .limit(50)
+        .all()
+    )
+    subject = db.query(Subject).filter(Subject.id == subject_id).first()
+    subject_name = subject.name if subject else ""
+    return [
+        StatusChangeOut(
+            id=log.id,
+            subject_id=log.subject_id,
+            subject_name=subject_name,
+            old_status=log.old_status,
+            new_status=log.new_status,
+            changed_at=log.changed_at.isoformat() if log.changed_at else "",
+        )
+        for log in logs
+    ]
+
+
+@app.delete("/api/careers/{career_id}/progress")
+def reset_career_progress(
+    career_id: int,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    career = db.query(Career).filter(Career.id == career_id).first()
+    if not career:
+        raise HTTPException(status_code=404, detail="Carrera no encontrada")
+    subject_ids = [s.id for s in career.subjects]
+    db.query(UserSubject).filter(
+        UserSubject.user_id == user["user_id"],
+        UserSubject.subject_id.in_(subject_ids),
+    ).delete(synchronize_session=False)
+    db.query(StatusChangeLog).filter(
+        StatusChangeLog.user_id == user["user_id"],
+        StatusChangeLog.subject_id.in_(subject_ids),
+    ).delete(synchronize_session=False)
+    db.commit()
+    return {"ok": True, "detail": "Progreso reiniciado"}
 
 
 # --- Progress endpoint ---
@@ -445,7 +539,59 @@ def admin_server_stats(admin: dict = Depends(require_admin)):
     )
 
 
+@app.delete("/api/admin/users/{user_id}")
+def admin_delete_user(user_id: int, admin: dict = Depends(require_admin), db: Session = Depends(get_db)):
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    if target.role == "admin":
+        raise HTTPException(status_code=400, detail="No se puede eliminar un administrador")
+    name = target.username
+    db.delete(target)
+    db.commit()
+    return {"ok": True, "detail": f'Usuario "{name}" eliminado'}
+
+
+@app.put("/api/admin/users/{user_id}")
+def admin_update_user(user_id: int, payload: AdminUserUpdate, admin: dict = Depends(require_admin), db: Session = Depends(get_db)):
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    if payload.role:
+        if payload.role not in ("admin", "user"):
+            raise HTTPException(status_code=400, detail="Rol inválido. Válidos: admin, user")
+        target.role = payload.role
+    db.commit()
+    return {"ok": True, "detail": f'Usuario "{target.username}" actualizado', "role": target.role}
+
+
+@app.get("/api/admin/backup")
+def admin_backup_db(admin: dict = Depends(require_admin)):
+    import shutil
+    from fastapi.responses import FileResponse
+    db_path = os.environ.get("DATABASE_URL", "sqlite:///./correlativas.db")
+    if db_path.startswith("sqlite:///"):
+        db_file = db_path[10:]
+    else:
+        raise HTTPException(status_code=400, detail="Backup solo disponible para SQLite")
+    if not os.path.exists(db_file):
+        raise HTTPException(status_code=404, detail="Archivo de base de datos no encontrado")
+    backup_path = db_file + ".backup"
+    shutil.copy2(db_file, backup_path)
+    return FileResponse(backup_path, filename="correlativas_backup.db", media_type="application/octet-stream")
+
+
 # --- Helpers ---
+
+
+def _has_circular_path(course: Subject, target: Subject, visited: set) -> bool:
+    if course.id in visited:
+        return False
+    visited.add(course.id)
+    for prereq in course.prerequisites:
+        if prereq.id == target.id or _has_circular_path(prereq, target, visited):
+            return True
+    return False
 
 
 def _get_user_status(subject_id: int, user_id: int, db: Session) -> str:
@@ -493,6 +639,18 @@ def _add_subjects_to_career(db: Session, career: Career, subjects_data: list):
             prereq = all_map.get(prereq_name)
             if prereq and prereq not in subj.prerequisites:
                 subj.prerequisites.append(prereq)
+
+    # Validate no circular dependencies exist after linking
+    for s in subjects_data:
+        subj = all_map.get(s.name) or name_to_subject.get(s.name)
+        if not subj:
+            continue
+        for prereq in subj.prerequisites:
+            if _has_circular_path(prereq, subj, set()):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Se detectó una dependencia circular con '{subj.name}'"
+                )
 
 
 def _subject_to_user_out(subject: Subject, status: str, db: Session) -> SubjectOut:
