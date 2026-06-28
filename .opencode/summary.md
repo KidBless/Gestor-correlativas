@@ -37,10 +37,11 @@
 - Subject history: view status change log per subject
 - Reset progress: reset all subjects to "no_cursada"
 - Export progress: download progress as JSON
-- Weekly schedule: grid view of subjects by year/semester with status colors
+- Export PDF: server-side PDF generation via fpdf2 (landscape A4, color-coded, by year/semester, with prerequisites and progress stats)
+- Plan semanal: detailed progress view listing all subjects by year/semester with status badges and prerequisites
 - Theme toggle: light/dark mode (persisted in localStorage)
 - Auto token refresh: refresh JWT every 30 minutes
-- beforeunload confirmation: warn before leaving with unsaved changes
+- beforeunload confirmation: warn before leaving
 - Responsive admin tables: wrap action buttons on small screens
 - `changelog.md` updated with all changes
 - `README.md` created; `ejemplo_plan.json` sample plan

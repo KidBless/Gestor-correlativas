@@ -1204,7 +1204,7 @@ document.getElementById("btn-export-pdf").addEventListener("click", async () => 
         return;
     }
     try {
-        const res = await fetch(`${API_URL}/careers/${currentCareerId}/progress/pdf`, {
+        const res = await fetch(`${API}/careers/${currentCareerId}/progress/pdf`, {
             headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) {
