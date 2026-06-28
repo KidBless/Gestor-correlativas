@@ -581,6 +581,110 @@ def admin_backup_db(admin: dict = Depends(require_admin)):
     return FileResponse(backup_path, filename="correlativas_backup.db", media_type="application/octet-stream")
 
 
+from fpdf import FPDF
+import io
+
+
+@app.get("/api/careers/{career_id}/progress/pdf")
+def export_progress_pdf(
+    career_id: int,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    career = db.query(Career).filter(Career.id == career_id).first()
+    if not career:
+        raise HTTPException(status_code=404, detail="Carrera no encontrada")
+    db_user = db.query(User).filter(User.id == user["user_id"]).first()
+    username = db_user.username if db_user else "desconocido"
+
+    subjects = []
+    for s in career.subjects:
+        prereq_names = [p.name for p in s.prerequisites]
+        regular_only = list(s.prerequisites_regular_only or [])
+        prereq_display = []
+        for p in prereq_names:
+            if p in regular_only:
+                prereq_display.append(f"{p} (solo regular)")
+            else:
+                prereq_display.append(p)
+        status = _get_user_status(s.id, user["user_id"], db)
+        subjects.append((s.year, s.semester, s.name, status, ", ".join(prereq_display) if prereq_display else "—"))
+
+    status_labels = {
+        "promocionado": "Promocionado",
+        "aprobado": "Aprobado",
+        "regular": "Regular",
+        "cursando": "Cursando",
+        "no_cursada": "No cursada",
+    }
+
+    aprobadas = sum(1 for _, _, _, st, _ in subjects if st in ("aprobado", "promocionado"))
+    total = len(subjects)
+    pct = round(aprobadas / total * 100) if total else 0
+
+    pdf = FPDF(orientation="L", unit="mm", format="A4")
+    pdf.add_page()
+    pdf.add_font("DejaVu", "", "/usr/share/fonts/TTF/DejaVuSans.ttf", uni=True)
+    pdf.add_font("DejaVu", "B", "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf", uni=True)
+    pdf.set_font("DejaVu", "B", 18)
+    pdf.cell(0, 12, f"Plan de estudios - {career.name}", new_x="LMARGIN", new_y="NEXT")
+    if career.faculty_name:
+        pdf.set_font("DejaVu", "", 10)
+        pdf.cell(0, 7, f"Facultad: {career.faculty_name}", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("DejaVu", "", 10)
+    pdf.cell(0, 7, f"Progreso: {aprobadas}/{total} ({pct}%)  |  Usuario: {username}", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(4)
+
+    status_colors = {
+        "promocionado": (16, 185, 129),
+        "aprobado": (59, 130, 246),
+        "regular": (245, 158, 11),
+        "cursando": (217, 119, 6),
+        "no_cursada": (156, 163, 175),
+    }
+
+    subjects.sort(key=lambda x: (x[0], x[1]))
+
+    current_year = None
+    for year, sem, name, st, prereqs in subjects:
+        if year != current_year:
+            if current_year is not None:
+                pdf.ln(3)
+            current_year = year
+            pdf.set_fill_color(30, 30, 30)
+            pdf.set_text_color(255, 255, 255)
+            pdf.set_font("DejaVu", "B", 11)
+            pdf.cell(0, 8, f"  Año {year}", fill=True, new_x="LMARGIN", new_y="NEXT")
+        color = status_colors.get(st, (100, 100, 100))
+        pdf.set_fill_color(*color)
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font("DejaVu", "", 9)
+        pdf.cell(8, 7, "", fill=True)
+        pdf.set_fill_color(245, 245, 245)
+        pdf.cell(10, 7, f"S{sem}", fill=True, new_x="END")
+        x = pdf.get_x()
+        pdf.cell(0, 7, f"  {name}", fill=True, new_x="END")
+        pdf.set_font("DejaVu", "", 8)
+        pdf.set_text_color(100, 100, 100)
+        label = status_labels.get(st, st)
+        pdf.cell(28, 7, label, fill=True, new_x="END", align="R")
+        if prereqs and prereqs != "—":
+            pdf.set_font("DejaVu", "", 7)
+            pdf.cell(0, 7, f"  Corr: {prereqs}", fill=True, new_x="LMARGIN", new_y="NEXT")
+        else:
+            pdf.cell(0, 7, "", fill=True, new_x="LMARGIN", new_y="NEXT")
+
+    buf = io.BytesIO()
+    pdf.output(buf)
+    buf.seek(0)
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=progreso_{career.name}.pdf"},
+    )
+
+
 # --- Helpers ---
 
 

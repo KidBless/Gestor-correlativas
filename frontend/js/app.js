@@ -1197,9 +1197,31 @@ function renderSchedule(subjects) {
     container.innerHTML = html;
 }
 
-// --- Export PDF (via print) ---
-document.getElementById("btn-export-pdf").addEventListener("click", () => {
-    window.print();
+// --- Export PDF ---
+document.getElementById("btn-export-pdf").addEventListener("click", async () => {
+    if (!currentCareerId) {
+        toast("No hay carrera seleccionada", "warning");
+        return;
+    }
+    try {
+        const res = await fetch(`${API_URL}/careers/${currentCareerId}/progress/pdf`, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Error al generar PDF");
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "progreso.pdf";
+        a.click();
+        URL.revokeObjectURL(url);
+        toast("PDF exportado", "success");
+    } catch (err) {
+        toast("Error: " + err.message, "error");
+    }
 });
 
 // --- Render progress ---
