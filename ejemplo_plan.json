@@ -1,0 +1,122 @@
+[
+  {
+    "name": "Análisis Matemático I",
+    "year": 1,
+    "semester": 1,
+    "prerequisites": []
+  },
+  {
+    "name": "Álgebra",
+    "year": 1,
+    "semester": 1,
+    "prerequisites": []
+  },
+  {
+    "name": "Sistemas de Representación",
+    "year": 1,
+    "semester": 1,
+    "prerequisites": []
+  },
+  {
+    "name": "Física I",
+    "year": 1,
+    "semester": 1,
+    "prerequisites": []
+  },
+  {
+    "name": "Química",
+    "year": 1,
+    "semester": 1,
+    "prerequisites": []
+  },
+  {
+    "name": "Análisis Matemático II",
+    "year": 1,
+    "semester": 2,
+    "prerequisites": ["Análisis Matemático I"]
+  },
+  {
+    "name": "Álgebra Lineal",
+    "year": 1,
+    "semester": 2,
+    "prerequisites": ["Álgebra"]
+  },
+  {
+    "name": "Física II",
+    "year": 1,
+    "semester": 2,
+    "prerequisites": ["Física I", "Análisis Matemático I"]
+  },
+  {
+    "name": "Probabilidad y Estadística",
+    "year": 2,
+    "semester": 1,
+    "prerequisites": ["Análisis Matemático II"]
+  },
+  {
+    "name": "Programación I",
+    "year": 1,
+    "semester": 2,
+    "prerequisites": ["Sistemas de Representación"]
+  },
+  {
+    "name": "Programación II",
+    "year": 2,
+    "semester": 1,
+    "prerequisites": ["Programación I", "Álgebra Lineal"]
+  },
+  {
+    "name": "Estructuras de Datos",
+    "year": 2,
+    "semester": 2,
+    "prerequisites": ["Programación II"]
+  },
+  {
+    "name": "Ingeniería de Software I",
+    "year": 2,
+    "semester": 2,
+    "prerequisites": ["Programación II"]
+  },
+  {
+    "name": "Ingeniería de Software II",
+    "year": 3,
+    "semester": 1,
+    "prerequisites": ["Ingeniería de Software I"]
+  },
+  {
+    "name": "Ingeniería de Software III",
+    "year": 3,
+    "semester": 2,
+    "prerequisites": ["Ingeniería de Software II"]
+  },
+  {
+    "name": "Bases de Datos",
+    "year": 2,
+    "semester": 2,
+    "prerequisites": ["Estructuras de Datos"]
+  },
+  {
+    "name": "Redes",
+    "year": 3,
+    "semester": 1,
+    "prerequisites": ["Estructuras de Datos"]
+  },
+  {
+    "name": "Sistemas Operativos",
+    "year": 3,
+    "semester": 1,
+    "prerequisites": ["Estructuras de Datos", "Programación II"]
+  },
+  {
+    "name": "Inteligencia Artificial",
+    "year": 4,
+    "semester": 1,
+    "prerequisites": ["Probabilidad y Estadística", "Estructuras de Datos"]
+  },
+  {
+    "name": "Tesis de Grado",
+    "year": 5,
+    "semester": 1,
+    "prerequisites": ["Ingeniería de Software III", "Inteligencia Artificial"]
+  }
+]

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de Correlativas</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app">
+        <div id="toast-container"></div>
+
+        <!-- Auth screen -->
+        <div id="auth-screen">
+            <header>
+                <h1>Gestor de Correlativas</h1>
+                <p>Seguí tu avance en la carrera</p>
+            </header>
+            <section>
+                <div class="auth-tabs">
+                    <button class="auth-tab active" data-auth="login">Iniciar sesión</button>
+                    <button class="auth-tab" data-auth="register">Registrarse</button>
+                </div>
+                <div id="auth-login" class="auth-panel">
+                    <div class="form-row">
+                        <input type="text" id="login-username" placeholder="Usuario">
+                        <input type="password" id="login-password" placeholder="Contraseña">
+                        <button id="btn-login">Ingresar</button>
+                    </div>
+                </div>
+                <div id="auth-register" class="auth-panel hidden">
+                    <div class="form-row">
+                        <input type="text" id="register-username" placeholder="Usuario">
+                        <input type="password" id="register-password" placeholder="Contraseña">
+                        <button id="btn-register">Crear cuenta</button>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Main app -->
+        <div id="main-app" class="hidden">
+            <header>
+                <div class="header-row">
+                    <div class="header-left">
+                        <span id="user-badge" class="hidden"></span>
+                    </div>
+                    <div class="header-center">
+                        <h1>Gestor de Correlativas</h1>
+                        <p>Seguí tu avance en la carrera</p>
+                    </div>
+                    <div class="header-right">
+                        <button id="btn-logout" class="secondary btn-small hidden">Cerrar sesión</button>
+                    </div>
+                </div>
+            </header>
+
+            <main>
+                <!-- Step 1: Career -->
+                <section id="step-career">
+                    <h2><span class="step-num">1</span> Carrera</h2>
+                    <div class="search-group">
+                        <div class="search-wrapper">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" id="career-search" placeholder="Filtrar carreras por nombre o facultad...">
+                        </div>
+                        <div class="form-row" style="margin-bottom:0;">
+                            <select id="career-select">
+                                <option value="">Seleccionar carrera existente...</option>
+                            </select>
+                            <button id="btn-load-career" class="secondary">Cargar</button>
+                        </div>
+                    </div>
+                    <p id="career-search-empty" class="help hidden">No se encontraron carreras con ese nombre.</p>
+                    <hr>
+                    <div class="form-row">
+                        <input type="text" id="career-name" placeholder="Nombre de la nueva carrera (ej: Analista en Sistemas)">
+                        <button id="btn-create-career">Crear carrera</button>
+                    </div>
+                </section>
+
+                <!-- Step 2: Upload -->
+                <section id="step-upload" class="hidden">
+                    <h2><span class="step-num">2</span> Cargar plan de estudios</h2>
+
+                    <div class="method-tabs">
+                        <button class="method-tab active" data-method="pdf">
+                            <span class="tab-icon">📄</span> PDF
+                        </button>
+                        <button class="method-tab" data-method="text">
+                            <span class="tab-icon">📝</span> Texto
+                        </button>
+                        <button class="method-tab" data-method="manual">
+                            <span class="tab-icon">✏️</span> Manual
+                        </button>
+                    </div>
+
+                    <div id="method-pdf" class="method-panel">
+                        <p class="help">Subí el PDF del plan de estudios. El sistema va a extraer las materias y correlativas automáticamente.</p>
+                        <div class="form-row">
+                            <input type="file" id="pdf-input" accept=".pdf">
+                            <button id="btn-upload-pdf">Subir PDF</button>
+                        </div>
+                        <div id="pdf-status"></div>
+                    </div>
+
+                    <div id="method-text" class="method-panel hidden">
+                        <p class="help"><strong>Pegá el texto del plan de estudios</strong> copiado del PDF o de la página web de tu facultad.</p>
+                        <textarea id="text-input" rows="8" placeholder='Ejemplo:
+
+Año 1 - Semestre 1
+Análisis Matemático I
+Álgebra
+
+Año 1 - Semestre 2
+Análisis Matemático II (correlativa: Análisis Matemático I)
+Álgebra Lineal (correlativa: Álgebra)
+Física I (correlativas: Análisis Matemático I, Álgebra)'></textarea>
+                        <button id="btn-parse-text">Parsear texto</button>
+                        <div id="text-status"></div>
+                    </div>
+
+                    <div id="method-manual" class="method-panel hidden">
+                        <p class="help"><strong>Agregá materia por materia</strong> o pegá un JSON con los datos.</p>
+                        <details>
+                            <summary class="raw-text-toggle">Cargar desde JSON</summary>
+                            <textarea id="json-input" rows="6" placeholder='[
+  {
+    "name": "Análisis Matemático I",
+    "year": 1,
+    "semester": 1,
+    "prerequisites": []
+  }
+]'></textarea>
+                            <button id="btn-upload-json" style="margin-bottom:12px;">Cargar JSON</button>
+                        </details>
+
+                        <div class="form-row">
+                            <input type="text" id="subj-name" placeholder="Nombre de la materia">
+                            <input type="number" id="subj-year" placeholder="Año" min="1" style="max-width:80px;">
+                            <input type="number" id="subj-semester" placeholder="Sem." min="1" max="2" style="max-width:80px;">
+                        </div>
+                        <div class="form-row">
+                            <input type="text" id="subj-prereqs" placeholder="Correlativas (separadas por coma)">
+                            <button id="btn-add-subject">Agregar materia</button>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div id="pdf-preview-section" class="hidden">
+                        <h2 style="margin-top:0;"><span class="step-num" style="background:linear-gradient(135deg,#22c55e,#16a34a);">✓</span> Vista previa</h2>
+                        <p class="help">Revisá las materias detectadas, corregí lo necesario y confirmá para guardarlas.</p>
+                        <div id="pdf-preview-table"></div>
+                        <div class="form-row">
+                            <button id="btn-confirm-pdf" class="success">Confirmar y guardar</button>
+                            <button id="btn-cancel-pdf" class="secondary">Cancelar</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Step 3: Subjects -->
+                <section id="step-manage" class="hidden">
+                    <h2><span class="step-num">3</span> Mis materias</h2>
+                    <div id="subjects-container">
+                        <p class="help">No hay materias cargadas aún.</p>
+                    </div>
+                </section>
+
+                <!-- Step 4: Progress -->
+                <section id="step-progress" class="hidden">
+                    <h2><span class="step-num">4</span> Avance</h2>
+                    <div id="progress-container"></div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

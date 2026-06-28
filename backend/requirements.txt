@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+pdfminer.six
+python-multipart
+pyjwt
